@@ -52,7 +52,6 @@ Development chains:
 - Use the **Alice** account as the default `sudo` account.
 - Are preconfigured with a genesis state (`/node/src/chain_spec.rs`) that includes several prefunded development accounts.
 
-
 To persist chain state between runs, specify a base path by running a command similar to the following:
 
 ```sh
@@ -74,3 +73,13 @@ db keystore network
 ### Connect with Polkadot-JS Apps Front-End
 
 After you start the Xcavate node locally, you can connect it with Polkadot-JS Apps front-end to interact with the chain. [Click here](https://polkadotjs-apps.web.app/#/accounts) to use the Polkadot-JS Apps.
+
+### Docker
+
+Use the following command to build using the included Dockerfile:
+
+`docker build -t xcavate_node .`
+
+Once a docker image is built, it is possible to run the tests with the following command:
+
+`docker run xcavate_node test`
