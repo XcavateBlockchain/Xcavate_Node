@@ -77,8 +77,7 @@ After you start the Xcavate node locally, you can connect it with Polkadot-JS Ap
 ### Docker
 
 Use the following command to build using the included Dockerfile:
-
 docker build -t xcavate_node .
-Once a docker image is built, it is possible to run the tests with the following command:
 
+Once a docker image is built, it is possible to run the tests with the following command:
 docker run xcavate_node test
