@@ -20,17 +20,15 @@ pub use weights::*;
 mod benchmarking;
 
 use frame_support::sp_runtime::{
-	traits::{AccountIdConversion, StaticLookup, Zero},
+	traits::{AccountIdConversion, StaticLookup, Zero, BlockNumberProvider},
 	Permill, RuntimeDebug,
 };
 
 use frame_support::{
-	inherent::Vec,
 	pallet_prelude::*,
-	traits::{Currency, Get, OnUnbalanced, ReservableCurrency, UnixTime},
+	traits::{Currency, GenesisBuild, Get, OnUnbalanced, ReservableCurrency, UnixTime},
 	PalletId,
 };
-
 use sp_std::prelude::*;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
@@ -234,7 +232,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		ProposalIndex,
-		Proposal<T::AccountId, BalanceOf<T>, T::BlockNumber>,
+		Proposal<T::AccountId, BalanceOf<T>, BlockNumberProvider>,
 		OptionQuery,
 	>;
 
@@ -347,7 +345,7 @@ pub mod pallet {
 						Self::reject_loan_proposal(*item).unwrap_or_default();
 					}
 					OngoingVotes::<T>::remove(item);
-				}			
+				}
 			});
 			weight
 		}
@@ -605,10 +603,7 @@ pub mod pallet {
 		/// Adding a new address to the vote committee
 		#[pallet::call_index(6)]
 		#[pallet::weight(0)]
-		pub fn add_committee_member(
-			origin: OriginFor<T>,
-			member: T::AccountId,
-		) -> DispatchResult {
+		pub fn add_committee_member(origin: OriginFor<T>, member: T::AccountId) -> DispatchResult {
 			T::CommitteeOrigin::ensure_origin(origin)?;
 			let current_members = Self::voting_committee();
 			ensure!(!current_members.contains(&member), Error::<T>::AlreadyMember);
