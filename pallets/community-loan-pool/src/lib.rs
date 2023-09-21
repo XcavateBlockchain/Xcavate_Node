@@ -23,7 +23,7 @@ use frame_support::sp_runtime::{
 	traits::{AccountIdConversion, StaticLookup, Zero, BlockNumberProvider},
 	Permill, RuntimeDebug,
 };
-use frame_support::sp_runtime;
+// use frame_support::sp_runtime;
 
 use frame_support::{
 	pallet_prelude::*,
@@ -233,7 +233,7 @@ pub mod pallet {
 		_,
 		Twox64Concat,
 		ProposalIndex,
-		Proposal<T::AccountId, BalanceOf<T>, T::BlockNumberProvider>,
+		Proposal<T::AccountId, BalanceOf<T>, BlockNumberProvider>,
 		OptionQuery,
 	>;
 
