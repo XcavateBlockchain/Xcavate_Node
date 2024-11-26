@@ -80,6 +80,7 @@ pallet-preimage = {  default-features = false, git = "https://github.com/parityt
 pallet-referenda = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.6.0" }
 pallet-conviction-voting = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.6.0" }
 pallet-nft-fractionalization = {  default-features = false, git = "https://github.com/paritytech/polkadot-sdk", tag = "polkadot-v1.6.0" }
+orml-vesting = {  default-features = false, git = "https://github.com/open-web3-stack/open-runtime-module-library", branch = "polkadot-v1.6.0" }
 # pallet-acurast-fulfillment-receiver = { git = "https://github.com/Acurast/acurast-core.git", default-features = false, branch = "staging/polkadot-v1.6.0" }
 # acurast-p256-crypto = { git = "https://github.com/Acurast/acurast-core.git", default-features = false, branch = "staging/polkadot-v1.6.0" }
 # pallet-acurast-fulfillment-receiver = { git = "https://github.com/Acurast/acurast-core.git", default-features = false, branch = "develop" }
@@ -181,6 +182,7 @@ std = [
 	"pallet-nft-fractionalization/std",
 	# "pallet-acurast-fulfillment-receiver/std",
 	# "acurast-p256-crypto/std",
+	"orml-vesting/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",
@@ -218,6 +220,7 @@ runtime-benchmarks = [
 	"pallet-conviction-voting/runtime-benchmarks",
 	"pallet-nft-fractionalization/runtime-benchmarks",
 	"pallet-sudo/runtime-benchmarks",
+	"orml-vesting/runtime-benchmarks",
 ]
 try-runtime = [
 	"frame-try-runtime/try-runtime",
@@ -262,4 +265,5 @@ try-runtime = [
 	"pallet-referenda/try-runtime",
 	"pallet-conviction-voting/try-runtime",
 	"pallet-nft-fractionalization/try-runtime",
+	"orml-vesting/try-runtime",
 ]

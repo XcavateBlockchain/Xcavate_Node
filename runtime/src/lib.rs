@@ -1297,6 +1297,21 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type RuntimeHoldReason = RuntimeHoldReason;
 }
 
+parameter_types! {
+	pub const MinVestedTransfer: Balance = 100 * 2_000;
+	pub const MaxVestingSchedules: u32 = 100;
+}
+
+impl orml_vesting::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = Balances;
+	type MinVestedTransfer = MinVestedTransfer;
+	type VestedTransferOrigin = EnsureSigned<AccountId>;
+	type WeightInfo = ();
+	type MaxVestingSchedules = MaxVestingSchedules;
+	type BlockNumberProvider = System;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub struct Runtime
@@ -1342,6 +1357,7 @@ construct_runtime!(
 		Preimage: pallet_preimage,
 		Democracy: pallet_democracy,
 		NftFractionalization: pallet_nft_fractionalization,
+		Vesting: orml_vesting,
 	}
 );
 
