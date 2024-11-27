@@ -14,7 +14,7 @@ mod benchmarking;
 pub mod weights;
 pub use weights::*;
 
-use pallet_assets::Instance1;
+use pallet_assets::{Instance1, Instance2};
 
 use frame_support::{
 	traits::{Currency, Incrementable, ReservableCurrency},
@@ -208,6 +208,7 @@ pub mod pallet {
 		+ pallet_nfts::Config
 		+ pallet_xcavate_whitelist::Config
 		+ pallet_assets::Config<Instance1>
+		+ pallet_assets::Config<Instance2>
 		+ pallet_nft_fractionalization::Config
 	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
@@ -286,6 +287,12 @@ pub mod pallet {
 			+ From<u32>
 			+ Ord
 			+ Copy;
+		
+		type AssetId3: IsType<<Self as pallet_assets::Config<Instance2>>::AssetId>
+			+ Parameter
+			+ From<u32>
+			+ Ord
+			+ Copy;
 
 		/// The Trasury's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
@@ -302,6 +309,7 @@ pub mod pallet {
 
 	pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
 	pub type AssetId<T> = <T as Config>::AssetId2;
+	pub type ForeignAssetId<T> = <T as Config>::AssetId3;
 	pub type CollectionId<T> = <T as Config>::CollectionId;
 	pub type ItemId<T> = <T as Config>::ItemId;
 	pub type FractionalizeCollectionId<T> = <T as Config>::FractionalizeCollectionId;
@@ -1668,9 +1676,9 @@ pub mod pallet {
 				TryInto::<u32>::try_into(amount).map_err(|_| Error::<T>::ConversionError)?;
 			let origin: OriginFor<T> = RawOrigin::Signed(from).into();
 			let account_lookup = <T::Lookup as StaticLookup>::unlookup(to);
-			let asset_id: AssetId<T> = 1.into();
+			let asset_id: ForeignAssetId<T> = 1.into();
 			let token_amount = u32_amunt.into();
-			Ok(pallet_assets::Pallet::<T, Instance1>::transfer(
+			Ok(pallet_assets::Pallet::<T, Instance2>::transfer(
 				origin,
 				asset_id.into().into(),
 				account_lookup,

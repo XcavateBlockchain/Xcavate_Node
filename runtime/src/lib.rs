@@ -416,7 +416,7 @@ impl pallet_transaction_payment::Config for Runtime {
 
 impl pallet_asset_tx_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Fungibles = Assets;
+	type Fungibles = PropertyAssets;
 	type OnChargeAssetTransaction = pallet_asset_tx_payment::FungiblesAdapter<
 		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto, Instance1>,
 		CreditToBlockAuthor,
@@ -454,6 +454,7 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type AssetId2 = u32;
+	type AssetId3 = u32;
 	type PostcodeLimit = Postcode;
 }
 
@@ -1288,7 +1289,7 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
-	type Assets = Assets;
+	type Assets = PropertyAssets;
 	type Nfts = Nfts;
 	type PalletId = NftFractionalizationPalletId;
 	type WeightInfo = substrate_weights::pallet_nft_fractionalization::WeightInfo<Runtime>;
@@ -1332,8 +1333,8 @@ construct_runtime!(
 		PropertyGovernance: pallet_property_governance,
 		Nfts: pallet_nfts,
 		Uniques: pallet_uniques, //10
-		Assets: pallet_assets::<Instance1>,
-		PoolAssets: pallet_assets::<Instance2>,
+		PropertyAssets: pallet_assets::<Instance1>,
+		ForeignAssets: pallet_assets::<Instance2>,
 		Utility: pallet_utility,
 		Multisig: pallet_multisig,
 		Authorship: pallet_authorship::{Pallet, Storage},
