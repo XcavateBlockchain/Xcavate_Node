@@ -23,6 +23,7 @@ use frame_support::{
 		fungible::HoldConsideration,
 		tokens::{PayFromAccount, UnityAssetBalanceConversion},
 		AsEnsureOriginWithArg, EitherOfDiverse, EqualPrivilegeOnly, LinearStoragePrice,
+		WithdrawReasons,
 	},
 	PalletId,
 };
@@ -1297,6 +1298,23 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type RuntimeHoldReason = RuntimeHoldReason;
 }
 
+parameter_types! {
+	pub const MinVestedTransfer: u64 = 256 * 2;
+	pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
+		WithdrawReasons::except(WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE);
+}
+
+impl pallet_vesting::Config for Runtime {
+	type BlockNumberToBalance = ConvertInto;
+	type Currency = Balances;
+	type RuntimeEvent = RuntimeEvent;
+	const MAX_VESTING_SCHEDULES: u32 = 10;
+	type MinVestedTransfer = MinVestedTransfer;
+	type WeightInfo = ();
+	type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
+	type BlockNumberProvider = System;
+} 
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub struct Runtime
@@ -1342,6 +1360,7 @@ construct_runtime!(
 		Preimage: pallet_preimage,
 		Democracy: pallet_democracy,
 		NftFractionalization: pallet_nft_fractionalization,
+		Vesting: pallet_vesting,
 	}
 );
 
@@ -1399,7 +1418,7 @@ mod benches {
 		[pallet_utility, Utility]
 		[pallet_multisig, Multisig]
 		[pallet_nft_fractionalization, NftFractionalization]
-
+		[pallet_vesting, Vesting]
 		[pallet_sudo, Sudo]
 	);
 }

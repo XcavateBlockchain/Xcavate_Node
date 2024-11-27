@@ -74,6 +74,7 @@ pub fn development_config() -> Result<ChainSpec, String> {
 		get_root_account(),
 		// Pre-funded accounts
 		get_endowed_accounts_with_balance(),
+		get_vestings(),
 		true,
 	))
 	.with_properties(chain_spec_properties())
@@ -95,6 +96,7 @@ pub fn local_testnet_config() -> Result<ChainSpec, String> {
 		get_root_account(),
 		// Pre-funded accounts
 		get_endowed_accounts_with_balance(),
+		get_vestings(),
 		true,
 	))
 	.build())
@@ -112,6 +114,7 @@ fn testnet_genesis(
 	)>,
 	root_key: AccountId,
 	endowed_accounts: Vec<(AccountId, u128)>,
+	vestings: Vec<(AccountId, u32, u32, u128)>,
 	_enable_println: bool,
 ) -> serde_json::Value {
 	const ENDOWMENT: Balance = 100_000 * DOLLARS;
@@ -157,6 +160,9 @@ fn testnet_genesis(
 					})
 					.collect::<Vec<_>>(),
 			},
+			"vesting": {
+				"vesting": vestings
+			}
 		})
 }
 
@@ -204,6 +210,13 @@ pub fn get_endowed_accounts_with_balance() -> Vec<(AccountId, u128)> {
 	});
 
 	accounts
+}
+
+pub fn get_vestings() -> Vec<(AccountId, u32, u32, u128)> {
+	let json_data = &include_bytes!("../../seed/vestings.json")[..];
+	let additional_accounts_with_balance: Vec<(AccountId, u32, u32, u128)> =
+		serde_json::from_slice(json_data).unwrap_or_default();
+	additional_accounts_with_balance
 }
 
 pub fn get_root_account() -> AccountId {
