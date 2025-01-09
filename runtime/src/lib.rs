@@ -416,7 +416,7 @@ impl pallet_transaction_payment::Config for Runtime {
 
 impl pallet_asset_tx_payment::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Fungibles = PropertyAssets;
+	type Fungibles = Assets;
 	type OnChargeAssetTransaction = pallet_asset_tx_payment::FungiblesAdapter<
 		pallet_assets::BalanceToAssetBalance<Balances, Runtime, ConvertInto, Instance1>,
 		CreditToBlockAuthor,
@@ -434,6 +434,7 @@ parameter_types! {
 	pub const NftMarketplacePalletId: PalletId = PalletId(*b"py/nftxc");
 	pub const MaxNftTokens: u32 = 250;
 	pub const Postcode: u32 = 10;
+	pub const MaxPaymentOption: u32 = 2;
 }
 
 /// Configure the pallet-nft-marketplace in pallets/nft-marketplace.
@@ -456,6 +457,7 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type AssetId2 = u32;
 	type AssetId3 = u32;
 	type PostcodeLimit = Postcode;
+	type MaxPaymentOptions = MaxPaymentOption;
 }
 
 parameter_types! {
@@ -1289,7 +1291,7 @@ impl pallet_nft_fractionalization::Config for Runtime {
 	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
-	type Assets = PropertyAssets;
+	type Assets = Assets;
 	type Nfts = Nfts;
 	type PalletId = NftFractionalizationPalletId;
 	type WeightInfo = substrate_weights::pallet_nft_fractionalization::WeightInfo<Runtime>;
@@ -1333,7 +1335,7 @@ construct_runtime!(
 		PropertyGovernance: pallet_property_governance,
 		Nfts: pallet_nfts,
 		Uniques: pallet_uniques, //10
-		PropertyAssets: pallet_assets::<Instance1>,
+		Assets: pallet_assets::<Instance1>,
 		ForeignAssets: pallet_assets::<Instance2>,
 		Utility: pallet_utility,
 		Multisig: pallet_multisig,

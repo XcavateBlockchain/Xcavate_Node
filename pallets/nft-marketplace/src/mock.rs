@@ -1,8 +1,8 @@
 use super::*;
 
 use crate as pallet_nft_marketplace;
-use frame_support::{parameter_types, traits::AsEnsureOriginWithArg, BoundedVec};
-use sp_core::ConstU32;
+use frame_support::{parameter_types, traits::AsEnsureOriginWithArg, BoundedVec, derive_impl};
+use sp_core::{ConstU32, ConstU128};
 use sp_runtime::{
 	traits::{AccountIdLookup, BlakeTwo256, IdentifyAccount, Verify},
 	MultiSignature,
@@ -53,6 +53,7 @@ parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
 }
 
+#[derive_impl(frame_system::config_preludes::ParaChainDefaultConfig as frame_system::DefaultConfig)]
 impl frame_system::Config for Test {
 	type RuntimeCall = RuntimeCall;
 	type Nonce = u32;
@@ -66,7 +67,7 @@ impl frame_system::Config for Test {
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u32>;
+	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type DbWeight = ();
@@ -81,10 +82,10 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_balances::Config for Test {
-	type Balance = u32;
+	type Balance = u128;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
-	type ExistentialDeposit = ConstU32<1>;
+	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 	type MaxLocks = ();
@@ -93,9 +94,8 @@ impl pallet_balances::Config for Test {
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type RuntimeFreezeReason = RuntimeFreezeReason;
 	type FreezeIdentifier = ();
-	// Holds are used with COLLATOR_LOCK_ID and DELEGATOR_LOCK_ID
-	type MaxHolds = ConstU32<2>;
 	type MaxFreezes = ConstU32<0>;
+	type MaxHolds = ConstU32<2>;
 }
 
 parameter_types! {
@@ -115,11 +115,11 @@ impl pallet_nfts::Config for Test {
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
 	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type Locker = ();
-	type CollectionDeposit = ConstU32<2>;
-	type ItemDeposit = ConstU32<1>;
-	type MetadataDepositBase = ConstU32<1>;
-	type AttributeDepositBase = ConstU32<1>;
-	type DepositPerByte = ConstU32<1>;
+	type CollectionDeposit = ConstU128<2>;
+	type ItemDeposit = ConstU128<1>;
+	type MetadataDepositBase = ConstU128<1>;
+	type AttributeDepositBase = ConstU128<1>;
+	type DepositPerByte = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
 	type KeyLimit = ConstU32<50>;
 	type ValueLimit = ConstU32<50>;
@@ -152,17 +152,17 @@ parameter_types! {
 
 impl pallet_assets::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Balance = u32;
+	type Balance = u128;
 	type AssetId = u32;
 	type AssetIdParameter = codec::Compact<u32>;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
 	type ForceOrigin = EnsureRoot<AccountId>;
-	type AssetDeposit = ConstU32<1>;
-	type AssetAccountDeposit = ConstU32<1>;
-	type MetadataDepositBase = ConstU32<1>;
-	type MetadataDepositPerByte = ConstU32<1>;
-	type ApprovalDeposit = ConstU32<1>;
+	type AssetDeposit = ConstU128<1>;
+	type AssetAccountDeposit = ConstU128<1>;
+	type MetadataDepositBase = ConstU128<1>;
+	type MetadataDepositPerByte = ConstU128<1>;
+	type ApprovalDeposit = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
 	type Extra = ();
@@ -173,17 +173,17 @@ impl pallet_assets::Config<Instance1> for Test {
 
 impl pallet_assets::Config<Instance2> for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Balance = u32;
+	type Balance = u128;
 	type AssetId = u32;
 	type AssetIdParameter = codec::Compact<u32>;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
 	type ForceOrigin = EnsureRoot<AccountId>;
-	type AssetDeposit = ConstU32<1>;
-	type AssetAccountDeposit = ConstU32<1>;
-	type MetadataDepositBase = ConstU32<1>;
-	type MetadataDepositPerByte = ConstU32<1>;
-	type ApprovalDeposit = ConstU32<1>;
+	type AssetDeposit = ConstU128<1>;
+	type AssetAccountDeposit = ConstU128<1>;
+	type MetadataDepositBase = ConstU128<1>;
+	type MetadataDepositPerByte = ConstU128<1>;
+	type ApprovalDeposit = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
 	type Extra = ();
@@ -200,7 +200,7 @@ parameter_types! {
 
 impl pallet_nft_fractionalization::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Deposit = ConstU32<1>;
+	type Deposit = ConstU128<1>;
 	type Currency = Balances;
 	type NewAssetSymbol = NewAssetSymbol;
 	type NewAssetName = NewAssetName;
@@ -223,6 +223,7 @@ parameter_types! {
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const CommunityProjectPalletId: PalletId = PalletId(*b"py/cmprj");
 	pub const Postcode: u32 = 10;
+	pub const MaxPaymentOption: u32 = 2;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -245,6 +246,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type AssetId2 = u32;
 	type AssetId3 = u32;
 	type PostcodeLimit = Postcode;
+	type MaxPaymentOptions = MaxPaymentOption;
 }
 
 // Build genesis storage according to the mock runtime.
@@ -257,6 +259,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			([1; 32].into(), 15_000_000),
 			([2; 32].into(), 1_150_000),
 			([3; 32].into(), 5_000),
+			([6; 32].into(), 5_000),
 			((NftMarketplace::account_id()), 20_000_000),
 		],
 	}
@@ -264,15 +267,31 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.unwrap();
 
 	pallet_assets::GenesisConfig::<Test, Instance2> {
-		assets: vec![(1, /* account("buyer", SEED, SEED) */ [0; 32].into(), true, 1)], // Genesis assets: id, owner, is_sufficient, min_balance
-		metadata: vec![(1, "XUSD".into(), "XUSD".into(), 0)], // Genesis metadata: id, name, symbol, decimals
+		assets: vec![(1984, /* account("buyer", SEED, SEED) */ [0; 32].into(), true, 1)], // Genesis assets: id, owner, is_sufficient, min_balance
+		metadata: vec![(1984, "USDT".into(), "USDT".into(), 0)], // Genesis metadata: id, name, symbol, decimals
 		accounts: vec![
-			(1, [0; 32].into(), 20_000_000),
-			(1, [1; 32].into(), 1_500_000),
-			(1, [2; 32].into(), 1_150_000),
-			(1, [3; 32].into(), 5_000),
-			(1, [4; 32].into(), 50),
-			(1, [5; 32].into(), 500),
+			(1984, [0; 32].into(), 20_000_000),
+			(1984, [1; 32].into(), 1_500_000),
+			(1984, [2; 32].into(), 1_150_000),
+			(1984, [3; 32].into(), 5_000),
+			(1984, [4; 32].into(), 50),
+			(1984, [5; 32].into(), 500),
+			(1984, [6; 32].into(), 1_500_000_000_000_000_000),
+		], // Genesis accounts: id, account_id, balance
+	}
+	.assimilate_storage(&mut test)
+	.unwrap();
+	pallet_assets::GenesisConfig::<Test, Instance2> {
+		assets: vec![(1337, /* account("buyer", SEED, SEED) */ [0; 32].into(), true, 1)], // Genesis assets: id, owner, is_sufficient, min_balance
+		metadata: vec![(1337, "USDC".into(), "USDC".into(), 0)], // Genesis metadata: id, name, symbol, decimals
+		accounts: vec![
+			(1337, [0; 32].into(), 20_000_000),
+			(1337, [1; 32].into(), 1_500_000),
+			(1337, [2; 32].into(), 1_150_000),
+			(1337, [3; 32].into(), 5_000),
+			(1337, [4; 32].into(), 50),
+			(1337, [5; 32].into(), 500),
+			(1337, [6; 32].into(), 1_500_000_000_000_000_000),
 		], // Genesis accounts: id, account_id, balance
 	}
 	.assimilate_storage(&mut test)
