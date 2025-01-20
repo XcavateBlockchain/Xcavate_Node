@@ -227,6 +227,7 @@ parameter_types! {
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 	pub const CommunityProjectPalletId: PalletId = PalletId(*b"py/cmprj");
 	pub const Postcode: u32 = 10;
+	pub const MaxPaymentOption: u32 = 2;
 }
 
 /// Configure the pallet-xcavate-staking in pallets/xcavate-staking.
@@ -247,6 +248,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type AssetId2 = u32;
 	type AssetId3 = u32;
 	type PostcodeLimit = Postcode;
+	type MaxPaymentOptions = MaxPaymentOption;
 }
 
 parameter_types! {

@@ -130,10 +130,17 @@ fn testnet_genesis(
 			// "grandpa": {
 			// 	"authorities": initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect::<Vec<_>>(),
 			// },
-	   		"foreignAssets" : {
-				"assets": vec![(1984, root_key.clone(), true, 1)], // Genesis assets: id, owner, is_sufficient, min_balance
-				"metadata": vec![(1984, "USDT".as_bytes(), "USDT".as_bytes(), 6)], // Genesis metadata: id, name, symbol, decimals
-				"accounts": endowed_accounts.iter().cloned().map(|x| (1984, x.0.clone(), 1_000_000)).collect::<Vec<_>>(),
+			"foreignAssets" : {
+				"assets": vec![(1337, root_key.clone(), true, 1), (1984, root_key.clone(), true, 1)], // Genesis assets: id, owner, is_sufficient, min_balance
+				"metadata": vec![(1337, "USDT".as_bytes(), "USDT".as_bytes(), 6), (1984, "USDT".as_bytes(), "USDT".as_bytes(), 6)], // Genesis metadata: id, name, symbol, decimals
+				"accounts": endowed_accounts
+				.iter()
+				.cloned()
+				.flat_map(|x| vec![
+					(1337, x.0.clone(), 1_000_000),
+					(1984, x.0.clone(), 1_000_000),
+				])
+				.collect::<Vec<_>>(),
 			},   
 			"sudo": {
 				// Assign network admin rights.
