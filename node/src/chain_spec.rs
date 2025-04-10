@@ -114,7 +114,7 @@ fn testnet_genesis(
 	)>,
 	root_key: AccountId,
 	endowed_accounts: Vec<(AccountId, u128)>,
-	vestings: Vec<(AccountId, u32, u32, u128)>,
+	_vestings: Vec<(AccountId, u32, u32, u128)>,
 	_enable_println: bool,
 ) -> serde_json::Value {
 	const ENDOWMENT: Balance = 100_000 * DOLLARS;

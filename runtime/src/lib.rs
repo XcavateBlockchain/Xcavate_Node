@@ -441,7 +441,9 @@ parameter_types! {
 impl pallet_nft_marketplace::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_nft_marketplace::weights::SubstrateWeight<Runtime>;
-	type Currency = Balances;
+	type NativeCurrency = Balances;
+	type LocalCurrency = Assets;
+	type ForeignCurrency = ForeignAssets;
 	type PalletId = NftMarketplacePalletId;
 	type MaxNftToken = MaxNftTokens;
 	type LocationOrigin = EnsureRoot<Self::AccountId>;
@@ -454,7 +456,6 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
-	type AssetId2 = u32;
 	type AssetId3 = u32;
 	type PostcodeLimit = Postcode;
 	type MaxPaymentOptions = MaxPaymentOption;

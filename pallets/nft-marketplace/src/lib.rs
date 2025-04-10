@@ -17,14 +17,21 @@ pub use weights::*;
 use pallet_assets::{Instance1, Instance2};
 
 use frame_support::{
-	traits::{Currency, Incrementable, ReservableCurrency},
+	traits::{
+		tokens::{fungible, fungibles},
+		fungible::{Mutate, Inspect},
+		fungibles::Mutate as FungiblesMutate,
+		fungibles::Inspect as FungiblesInspect,
+		Currency, Incrementable,
+		tokens::Preservation,
+	},
 	PalletId, DefaultNoBound,
 	storage::bounded_btree_map::BoundedBTreeMap,
 };
 
 use frame_support::sp_runtime::{
 	traits::{
-		AccountIdConversion, CheckedAdd, CheckedSub, CheckedDiv, CheckedMul, StaticLookup,
+		AccountIdConversion, CheckedAdd, CheckedSub, CheckedDiv, CheckedMul, StaticLookup, Zero,
 	},
 	Saturating,
 };
@@ -42,6 +49,13 @@ use codec::Codec;
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 
 type AssetBalanceOf<T> = <T as pallet_assets::Config<pallet_assets::Instance2>>::Balance;
+pub type Balance = u128;
+
+pub type LocalAssetIdOf<T> =
+	<<T as Config>::LocalCurrency as fungibles::Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
+
+pub type ForeignAssetIdOf<T> =
+	<<T as Config>::ForeignCurrency as fungibles::Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 
 type FrationalizedNftBalanceOf<T> = <T as pallet_nft_fractionalization::Config>::AssetBalance;
 
@@ -81,7 +95,7 @@ pub mod pallet {
 	#[scale_info(skip_type_params(T))]
 	pub struct NftDetails<T: Config> {
 		pub spv_created: bool,
-		pub asset_id: u32,
+		pub asset_id: LocalAssetIdOf<T>,
 		pub region: u32,
 		pub location: LocationId<T>,
 	}
@@ -89,7 +103,7 @@ pub mod pallet {
 	/// Infos regarding the listing of a real estate object.
 	#[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
-	pub struct NftListingDetails<Balance, ItemId, CollectionId, T: Config> {
+	pub struct NftListingDetails<ItemId, CollectionId, T: Config> {
 		pub real_estate_developer: AccountIdOf<T>,
 		pub token_price: Balance,
 		pub collected_funds: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
@@ -105,7 +119,7 @@ pub mod pallet {
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
-	pub struct TokenListingDetails<Balance, ItemId, CollectionId, T: Config> {
+	pub struct TokenListingDetails<ItemId, CollectionId, T: Config> {
 		pub seller: AccountIdOf<T>,
 		pub token_price: Balance,
 		pub asset_id: u32,
@@ -123,7 +137,7 @@ pub mod pallet {
 		pub item_id: ItemId,
 		pub region: u32,
 		pub location: LocationId<T>,
-		pub price: AssetBalanceOf<T>,
+		pub price: Balance,
 		pub token_amount: u32,
 	}
 
@@ -145,8 +159,8 @@ pub mod pallet {
 		pub spv_lawyer: Option<AccountIdOf<T>>,
 		pub real_estate_developer_status: DocumentStatus,
 		pub spv_status: DocumentStatus,
-		pub real_estate_developer_lawyer_costs: BoundedBTreeMap<PaymentAssets, AssetBalanceOf<T>, T::MaxNftToken>,
-		pub spv_lawyer_costs: BoundedBTreeMap<PaymentAssets, AssetBalanceOf<T>, T::MaxNftToken>,
+		pub real_estate_developer_lawyer_costs: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
+		pub spv_lawyer_costs: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
 		pub second_attempt: bool,
 	}
 
@@ -237,8 +251,22 @@ pub mod pallet {
 		/// Type representing the weight of this pallet.
 		type WeightInfo: WeightInfo;
 
-		/// The currency type.
-		type Currency: Currency<AccountIdOf<Self>> + ReservableCurrency<AccountIdOf<Self>>;
+		type NativeCurrency: fungible::Inspect<AccountIdOf<Self>>
+			+ fungible::Mutate<AccountIdOf<Self>>
+			+ fungible::hold::Inspect<AccountIdOf<Self>>
+			+ fungible::hold::Mutate<AccountIdOf<Self>>;
+
+		type LocalCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
+			+ fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
+			+ fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
+
+		type ForeignCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
+			+ fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
+			+ fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
 
 		/// The marketplace's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
@@ -300,13 +328,6 @@ pub mod pallet {
 			+ From<u32>
 			+ Ord
 			+ Copy;
-
-		/// Asset id type from pallet assets.
-		type AssetId2: IsType<<Self as pallet_assets::Config<Instance1>>::AssetId>
-			+ Parameter
-			+ From<u32>
-			+ Ord
-			+ Copy;
 		
 		type AssetId3: IsType<<Self as pallet_assets::Config<Instance2>>::AssetId>
 			+ Parameter
@@ -332,7 +353,6 @@ pub mod pallet {
 	}
 
 	pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
-	pub type AssetId<T> = <T as Config>::AssetId2;
 	pub type ForeignAssetId<T> = <T as Config>::AssetId3;
 	pub type CollectionId<T> = <T as Config>::CollectionId;
 	pub type ItemId<T> = <T as Config>::ItemId;
@@ -343,14 +363,12 @@ pub mod pallet {
 	pub type LocationId<T> = BoundedVec<u8, <T as Config>::PostcodeLimit>;
 
 	pub(super) type NftListingDetailsType<T> = NftListingDetails<
-		AssetBalanceOf<T>,
 		<T as pallet::Config>::ItemId,
 		<T as pallet::Config>::CollectionId,
 		T,
 	>;
 
 	pub(super) type ListingDetailsType<T> = TokenListingDetails<
-		AssetBalanceOf<T>,
 		<T as pallet::Config>::ItemId,
 		<T as pallet::Config>::CollectionId,
 		T,
@@ -431,7 +449,7 @@ pub mod pallet {
 		AccountIdOf<T>,
 		Blake2_128Concat,
 		ListingId,
-		TokenOwnerDetails<AssetBalanceOf<T>, T>,
+		TokenOwnerDetails<Balance, T>,
 		ValueQuery,
 	>;
 
@@ -480,7 +498,7 @@ pub mod pallet {
 		ListingId,
 		Blake2_128Concat,
 		AccountIdOf<T>,
-		OfferDetails<AssetBalanceOf<T>, T>,
+		OfferDetails<Balance, T>,
 		OptionQuery,
 	>;
 
@@ -510,27 +528,27 @@ pub mod pallet {
 		ObjectListed {
 			collection_index: <T as pallet::Config>::CollectionId,
 			item_index: <T as pallet::Config>::ItemId,
-			price: AssetBalanceOf<T>,
+			price: Balance,
 			seller: AccountIdOf<T>,
 		},
 		/// A token has been bought.
-		TokenBought { asset_id: u32, buyer: AccountIdOf<T>, price: AssetBalanceOf<T> },
+		TokenBought { asset_id: u32, buyer: AccountIdOf<T>, price: Balance },
 		/// Token from listed object have been bought.
-		TokenBoughtObject { asset_id: u32, buyer: AccountIdOf<T>, amount: u32, price: AssetBalanceOf<T> },
+		TokenBoughtObject { asset_id: u32, buyer: AccountIdOf<T>, amount: u32, price: Balance },
 		/// Token have been listed.
-		TokenListed { asset_id: u32, price: AssetBalanceOf<T>, seller: AccountIdOf<T> },
+		TokenListed { asset_id: u32, price: Balance, seller: AccountIdOf<T> },
 		/// The price of the token listing has been updated.
-		ListingUpdated { listing_index: ListingId, new_price: AssetBalanceOf<T> },
+		ListingUpdated { listing_index: ListingId, new_price: Balance },
 		/// The nft has been delisted.
 		ListingDelisted { listing_index: ListingId },
 		/// The price of the listed object has been updated.
-		ObjectUpdated { listing_index: ListingId, new_price: AssetBalanceOf<T> },
+		ObjectUpdated { listing_index: ListingId, new_price: Balance },
 		/// New region has been created.
 		RegionCreated { region_id: u32, collection_id: CollectionId<T> },
 		/// New location has been created.
 		LocationCreated { region_id: u32, location_id: LocationId<T> },
 		/// A new offer has been made.
-		OfferCreated { listing_id: ListingId, price: AssetBalanceOf<T> },
+		OfferCreated { listing_id: ListingId, price: Balance },
 		/// An offer has been cancelled.
 		OfferCancelled { listing_id: ListingId, account_id: AccountIdOf<T> },
 		/// A lawyer has been registered.
@@ -553,6 +571,7 @@ pub mod pallet {
 		/// The buyer doesn't have enough funds.
 		NotEnoughFunds,
 		NotEnoughFunds1,
+		NotEnoughFunds2,
 		/// Not enough token available to buy.
 		NotEnoughTokenAvailable,
 		/// Error by converting a type.
@@ -697,7 +716,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			region: RegionId,
 			location: LocationId<T>,
-			token_price: AssetBalanceOf<T>,
+			token_price: Balance,
 			token_amount: u32,
 			data: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
 		) -> DispatchResult {
@@ -715,9 +734,9 @@ pub mod pallet {
 			);
 			let mut next_item_id = NextNftId::<T>::get(collection_id);
 			let mut asset_number: u32 = NextAssetId::<T>::get();
-			let mut asset_id: AssetId<T> = asset_number.into();
-			while pallet_assets::Pallet::<T, Instance1>::maybe_total_supply(asset_id.into())
-				.is_some()
+			let mut asset_id: LocalAssetIdOf<T> = asset_number.into();
+			while !T::LocalCurrency::total_issuance(asset_id)
+				.is_zero()
 			{
 				asset_number = asset_number.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
 				asset_id = asset_number.into();
@@ -778,7 +797,7 @@ pub mod pallet {
 				nft_balance,
 			)?;
 			let property_price = token_price
-				.checked_mul(&Self::u128_to_balance_option(token_amount as u128)?)
+				.checked_mul(token_amount as u128)
 				.ok_or(Error::<T>::MultiplyError)?;
 			let asset_details =
 				AssetDetails { collection_id, item_id, region, location, price: property_price, token_amount };
@@ -831,25 +850,25 @@ pub mod pallet {
 
 				let transfer_price = nft_details
 					.token_price
-					.checked_mul(&Self::u128_to_balance_option(amount as u128)?)
+					.checked_mul(amount as u128)
 					.ok_or(Error::<T>::MultiplyError)?;
 
 				let fee = transfer_price
- 					.checked_mul(&Self::u128_to_balance_option(1)?)
+ 					.checked_mul(1)
 					.ok_or(Error::<T>::MultiplyError)?
-					.checked_div(&Self::u128_to_balance_option(100)?) 
+					.checked_div(100) 
 					.ok_or(Error::<T>::DivisionError)?;
 				
 				let tax = transfer_price
- 					.checked_mul(&Self::u128_to_balance_option(3)?)
+ 					.checked_mul(3)
 					.ok_or(Error::<T>::MultiplyError)?
-					.checked_div(&Self::u128_to_balance_option(100)?) 
+					.checked_div(100) 
 					.ok_or(Error::<T>::DivisionError)?;
 				
 				let total_transfer_price = transfer_price
-					.checked_add(&fee)
+					.checked_add(fee)
 					.ok_or(Error::<T>::ArithmeticOverflow)?
-					.checked_add(&tax)
+					.checked_add(tax)
 					.ok_or(Error::<T>::ArithmeticOverflow)?;
 
 				Self::transfer_funds(signer.clone(), Self::account_id(), total_transfer_price, payment_asset.id())?;
@@ -874,7 +893,7 @@ pub mod pallet {
 						.checked_add(amount)
 						.ok_or(Error::<T>::ArithmeticOverflow)?;
 					if let Some(balance) = token_owner_details.paid_funds.get_mut(&payment_asset) {
-						*balance = balance.checked_add(&transfer_price).ok_or(Error::<T>::ArithmeticOverflow)?;
+						*balance = balance.checked_add(transfer_price).ok_or(Error::<T>::ArithmeticOverflow)?;
 					} else {
 						token_owner_details
 							.paid_funds
@@ -882,7 +901,7 @@ pub mod pallet {
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 					}
 					if let Some(balance) = token_owner_details.paid_tax.get_mut(&payment_asset) {
-						*balance = balance.checked_add(&tax).ok_or(Error::<T>::ArithmeticOverflow)?;
+						*balance = balance.checked_add(tax).ok_or(Error::<T>::ArithmeticOverflow)?;
 					} else {
 						token_owner_details
 							.paid_tax
@@ -892,7 +911,7 @@ pub mod pallet {
 					Ok::<(), DispatchError>(())
 				})?;
 				if let Some(balance) = nft_details.collected_funds.get_mut(&payment_asset) {
-					*balance = balance.checked_add(&transfer_price).ok_or(Error::<T>::ArithmeticOverflow)?;
+					*balance = balance.checked_add(transfer_price).ok_or(Error::<T>::ArithmeticOverflow)?;
 				} else {
 					nft_details
 						.collected_funds
@@ -900,7 +919,7 @@ pub mod pallet {
 						.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 				}
 				if let Some(balance) = nft_details.collected_tax.get_mut(&payment_asset) {
-					*balance = balance.checked_add(&tax).ok_or(Error::<T>::ArithmeticOverflow)?;
+					*balance = balance.checked_add(tax).ok_or(Error::<T>::ArithmeticOverflow)?;
 				} else {
 					nft_details
 						.collected_tax
@@ -908,7 +927,7 @@ pub mod pallet {
 						.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 				}					
 				if let Some(balance) = nft_details.collected_fees.get_mut(&payment_asset) {
-					*balance = balance.checked_add(&fee).ok_or(Error::<T>::ArithmeticOverflow)?;
+					*balance = balance.checked_add(fee).ok_or(Error::<T>::ArithmeticOverflow)?;
 				} else {
 					nft_details
 						.collected_fees
@@ -962,7 +981,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			region: RegionId,
 			item_id: <T as pallet::Config>::ItemId,
-			token_price: AssetBalanceOf<T>,
+			token_price: Balance,
 			amount: u32,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin.clone())?;
@@ -980,14 +999,13 @@ pub mod pallet {
 				LocationRegistration::<T>::get(region, nft_details.location),
 				Error::<T>::LocationUnknown
 			);
-			let pallet_lookup = <T::Lookup as StaticLookup>::unlookup(Self::account_id());
-			let asset_id: AssetId<T> = nft_details.asset_id.into();
-			let token_amount = amount.into();
-			pallet_assets::Pallet::<T, Instance1>::transfer(
-				origin,
-				asset_id.into().into(),
-				pallet_lookup,
+			let token_amount: Balance = amount.try_into().map_err(|_| Error::<T>::ConversionError)?;
+			T::LocalCurrency::transfer(
+				nft_details.asset_id,
+				&signer,
+				&Self::account_id(),
 				token_amount,
+				Preservation::Expendable,
 			)
 			.map_err(|_| Error::<T>::NotEnoughFunds)?;
 			let mut listing_id = NextListingId::<T>::get();
@@ -1038,7 +1056,7 @@ pub mod pallet {
 			ensure!(listing_details.amount >= amount, Error::<T>::NotEnoughTokenAvailable);
 			let price = listing_details
 				.token_price
-				.checked_mul(&Self::u128_to_balance_option(amount.into())?)
+				.checked_mul(amount as u128)
 				.ok_or(Error::<T>::MultiplyError)?;
 			Self::buying_token_process(
 				listing_id,
@@ -1067,7 +1085,7 @@ pub mod pallet {
 		pub fn make_offer(
 			origin: OriginFor<T>,
 			listing_id: ListingId,
-			offer_price: AssetBalanceOf<T>,
+			offer_price: Balance,
 			amount: u32,
 			payment_asset: PaymentAssets,
 		) -> DispatchResult {
@@ -1081,7 +1099,7 @@ pub mod pallet {
 				TokenListings::<T>::get(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
 			ensure!(listing_details.amount >= amount, Error::<T>::NotEnoughTokenAvailable);
 			let price = offer_price
-				.checked_mul(&Self::u128_to_balance_option(amount.into())?)
+				.checked_mul(amount as u128)
 				.ok_or(Error::<T>::MultiplyError)?;
 			Self::transfer_funds(signer.clone(), Self::account_id(), price, payment_asset.id())?;
 			let offer_details = OfferDetails { buyer: signer.clone(), token_price: offer_price, amount, payment_assets: payment_asset };
@@ -1176,7 +1194,7 @@ pub mod pallet {
 		pub fn upgrade_listing(
 			origin: OriginFor<T>,
 			listing_id: ListingId,
-			new_price: AssetBalanceOf<T>,
+			new_price: Balance,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
@@ -1210,7 +1228,7 @@ pub mod pallet {
 		pub fn upgrade_object(
 			origin: OriginFor<T>,
 			listing_id: ListingId,
-			new_price: AssetBalanceOf<T>,
+			new_price: Balance,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(
@@ -1254,15 +1272,13 @@ pub mod pallet {
 			let listing_details =
 				TokenListings::<T>::take(listing_id).ok_or(Error::<T>::TokenNotForSale)?;
 			ensure!(listing_details.seller == signer, Error::<T>::NoPermission);
-			let user_lookup = <T::Lookup as StaticLookup>::unlookup(signer.clone());
-			let asset_id: AssetId<T> = listing_details.asset_id.into();
 			let token_amount = listing_details.amount.into();
-			let pallet_origin: OriginFor<T> = RawOrigin::Signed(Self::account_id()).into();
-			pallet_assets::Pallet::<T, Instance1>::transfer(
-				pallet_origin,
-				asset_id.into().into(),
-				user_lookup,
+			T::LocalCurrency::transfer(
+				listing_details.asset_id,
+				&Self::account_id(),
+				&signer.clone(),
 				token_amount,
+				Preservation::Expendable,
 			)
 			.map_err(|_| Error::<T>::NotEnoughFunds)?;
 			Self::deposit_event(Event::<T>::ListingDelisted { listing_index: listing_id });
@@ -1306,7 +1322,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			listing_id: ListingId,
 			legal_side: LegalProperty,
-			costs: AssetBalanceOf<T>,
+			costs: Balance,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			ensure!(RealEstateLawyer::<T>::get(signer.clone()), Error::<T>::NoPermission);
@@ -1342,7 +1358,7 @@ pub mod pallet {
 							.try_insert(PaymentAssets::USDC, costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 					} else {
-						let remaining_costs = costs.checked_sub(collected_fee_usdt).ok_or(Error::<T>::ArithmeticUnderflow)?;
+						let remaining_costs = costs.checked_sub(*collected_fee_usdt).ok_or(Error::<T>::ArithmeticUnderflow)?;
 						ensure!(*collected_fee_usdc >= remaining_costs, Error::<T>::CostsTooHigh);
 						property_lawyer_details
 							.real_estate_developer_lawyer_costs
@@ -1370,7 +1386,7 @@ pub mod pallet {
 							.try_insert(PaymentAssets::USDC, costs)
 							.map_err(|_| Error::<T>::ExceedsMaxEntries)?;
 					} else {
-						let remaining_costs = costs.checked_sub(collected_fee_usdt).ok_or(Error::<T>::ArithmeticUnderflow)?;
+						let remaining_costs = costs.checked_sub(*collected_fee_usdt).ok_or(Error::<T>::ArithmeticUnderflow)?;
 						ensure!(*collected_fee_usdc >= remaining_costs, Error::<T>::CostsTooHigh);
 						property_lawyer_details
 							.spv_lawyer_costs
@@ -1549,9 +1565,9 @@ pub mod pallet {
 				.ok_or(Error::<T>::AssetNotSupported)?;
 			let treasury_id = Self::treasury_account_id();
 			let seller_part = price
-				.checked_mul(&Self::u128_to_balance_option(99)?)
+				.checked_mul(&99u128)
 				.ok_or(Error::<T>::MultiplyError)?
-				.checked_div(&Self::u128_to_balance_option(100)?)
+				.checked_div(100u128)
 				.ok_or(Error::<T>::DivisionError)?;
 			let tax = nft_details
 				.collected_tax
@@ -1568,11 +1584,11 @@ pub mod pallet {
 					.get(&payment_asset)
 					.ok_or(Error::<T>::AssetNotSupported)?;
 			let treasury_fees = price
-				.checked_div(&Self::u128_to_balance_option(100)?)
+				.checked_div(&100u128)
 				.ok_or(Error::<T>::DivisionError)?
-				.checked_add(&(*nft_details.collected_fees
+				.checked_add(*nft_details.collected_fees
 					.get(&payment_asset)
-					.ok_or(Error::<T>::AssetNotSupported)?))
+					.ok_or(Error::<T>::AssetNotSupported)?)
 				.ok_or(Error::<T>::ArithmeticOverflow)?
 				.saturating_sub(*real_estate_developer_lawyer_costs)
 				.saturating_sub(*spv_lawyer_costs);
@@ -1593,18 +1609,16 @@ pub mod pallet {
 			Self::transfer_funds(pallet_account.clone(), spv_lawyer_id, *spv_lawyer_costs, payment_asset.id())?;
 			Self::transfer_funds(pallet_account.clone(), treasury_id, treasury_fees, payment_asset.id())?;
 			Self::transfer_funds(pallet_account.clone(), nft_details.real_estate_developer, seller_part, payment_asset.id())?; 
-			let origin: OriginFor<T> = RawOrigin::Signed(pallet_account).into();
-			let asset_id: AssetId<T> = nft_details.asset_id.into();
 			for owner in list {
-				let user_lookup = <T::Lookup as StaticLookup>::unlookup(owner.clone());
-				let token_details: TokenOwnerDetails<AssetBalanceOf<T>, T> = TokenOwner::<T>::take(owner.clone(), listing_id);
+				let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::take(owner.clone(), listing_id);
 				//let token: u64 = TokenOwner::<T>::take(owner.clone(), listing_id) as u64;
 				let token_amount = token_details.token_amount.try_into().map_err(|_| Error::<T>::ConversionError)?;
-				pallet_assets::Pallet::<T, Instance1>::transfer(
-					origin.clone(),
-					asset_id.into().into(),
-					user_lookup,
+				T::LocalCurrency::transfer(
+					nft_details.asset_id,
+					&pallet_account.clone(),
+					&owner.clone(),
 					token_amount,
+					Preservation::Expendable,
 				)
 				.map_err(|_| Error::<T>::NotEnoughFunds)?;
 				PropertyOwner::<T>::try_mutate(nft_details.asset_id, |keys| {
@@ -1697,7 +1711,7 @@ pub mod pallet {
 			Self::transfer_funds(pallet_account.clone(), spv_lawyer_id.clone(), *spv_lawyer_costs_usdt, payment_asset_usdt.id())?;
 			Self::transfer_funds(pallet_account.clone(), spv_lawyer_id, *spv_lawyer_costs_usdc, payment_asset_usdc.id())?;
 			for owner in list {
-				let token_details: TokenOwnerDetails<AssetBalanceOf<T>, T> = TokenOwner::<T>::take(owner.clone(), listing_id);
+				let token_details: TokenOwnerDetails<Balance, T> = TokenOwner::<T>::take(owner.clone(), listing_id);
 				let paid_tax_usdt = token_details.paid_tax.get(&PaymentAssets::USDT).ok_or(Error::<T>::AssetNotSupported)?;
 				let refund_amount_usdt = token_details
 					.paid_funds
@@ -1715,7 +1729,7 @@ pub mod pallet {
 					.checked_add(&paid_tax_usdc)
 					.ok_or(Error::<T>::ArithmeticOverflow)?;
 				
-				Self::transfer_funds1(pallet_account.clone(), owner.clone(), refund_amount_usdc, payment_asset_usdc.id())?;
+				Self::transfer_funds(pallet_account.clone(), owner.clone(), refund_amount_usdc, payment_asset_usdc.id())?;
 				PropertyOwner::<T>::take(nft_details.asset_id);
 				PropertyOwnerToken::<T>::take(nft_details.asset_id, owner);
 			}
@@ -1727,20 +1741,18 @@ pub mod pallet {
 			transfer_from: AccountIdOf<T>,
 			account: AccountIdOf<T>,
 			mut listing_details: ListingDetailsType<T>,
-			price: AssetBalanceOf<T>,
+			price: Balance,
 			amount: u32,
 			payment_asset: PaymentAssets,
 		) -> DispatchResult {
 			Self::calculate_fees(price, transfer_from.clone(), listing_details.seller.clone(), payment_asset.id())?;
-			let user_lookup = <T::Lookup as StaticLookup>::unlookup(account.clone());
-			let asset_id: AssetId<T> = listing_details.asset_id.into();
 			let token_amount = amount.into();
-			let pallet_origin: OriginFor<T> = RawOrigin::Signed(Self::account_id()).into();
-			pallet_assets::Pallet::<T, Instance1>::transfer(
-				pallet_origin,
-				asset_id.into().into(),
-				user_lookup,
+			T::LocalCurrency::transfer(
+				listing_details.asset_id,
+				&Self::account_id(),
+				&account.clone(),
 				token_amount,
+				Preservation::Expendable,
 			)
 			.map_err(|_| Error::<T>::NotEnoughFunds)?;
 			let mut old_token_owner_amount = PropertyOwnerToken::<T>::take(
@@ -1798,19 +1810,19 @@ pub mod pallet {
 		}
 
 		fn calculate_fees(
-			price: AssetBalanceOf<T>,
+			price: Balance,
 			sender: AccountIdOf<T>,
 			receiver: AccountIdOf<T>,
-			asset: u32,
+			asset: ForeignAssetIdOf<T>,
 		) -> DispatchResult {
 			let fees = price
-				.checked_div(&Self::u128_to_balance_option(100)?)
+				.checked_div(100u128)
 				.ok_or(Error::<T>::DivisionError)?;
 			let treasury_id = Self::treasury_account_id();
 			let seller_part = price
-				.checked_mul(&Self::u128_to_balance_option(99)?)
+				.checked_mul(99u128)
 				.ok_or(Error::<T>::MultiplyError)?
-				.checked_div(&Self::u128_to_balance_option(100)?)
+				.checked_div(100)
 				.ok_or(Error::<T>::DivisionError)?;
 			Self::transfer_funds(sender.clone(), treasury_id, fees, asset)?;
 			Self::transfer_funds(sender, receiver, seller_part, asset)?;
@@ -1847,46 +1859,31 @@ pub mod pallet {
 			ItemConfig { settings: ItemSettings::all_enabled() }
 		}
 
-		/// Converts a u128 to a balance.
-		pub fn u128_to_balance_option(input: u128) -> Result<AssetBalanceOf<T>, Error<T>> {
-			input.try_into().map_err(|_| Error::<T>::ConversionError)
-		}
-
 		fn transfer_funds(
 			from: AccountIdOf<T>,
 			to: AccountIdOf<T>,
-			amount: AssetBalanceOf<T>,
-			asset: u32,
+			amount: Balance,
+			asset: ForeignAssetIdOf<T>,
 		) -> DispatchResult {
-			let origin: OriginFor<T> = RawOrigin::Signed(from).into();
-			let account_lookup = <T::Lookup as StaticLookup>::unlookup(to);
-			let asset_id: ForeignAssetId<T> = asset.into();
-			Ok(pallet_assets::Pallet::<T, Instance2>::transfer(
-				origin,
-				asset_id.into().into(),
-				account_lookup,
-				amount,
-			)
-			.map_err(|_| Error::<T>::NotEnoughFunds)?)
+			if !amount.is_zero() {
+				T::ForeignCurrency::transfer(asset, &from, &to, amount, Preservation::Expendable)
+					.map_err(|_| Error::<T>::NotEnoughFunds)?;
+			}
+			Ok(())
 		}
 
-		fn transfer_funds1(
+ 		fn transfer_funds1(
 			from: AccountIdOf<T>,
 			to: AccountIdOf<T>,
-			amount: AssetBalanceOf<T>,
+			amount: Balance,
 			asset: u32,
 		) -> DispatchResult {
-			let origin: OriginFor<T> = RawOrigin::Signed(from).into();
-			let account_lookup = <T::Lookup as StaticLookup>::unlookup(to);
-			let asset_id: ForeignAssetId<T> = asset.into();
-			Ok(pallet_assets::Pallet::<T, Instance2>::transfer(
-				origin,
-				asset_id.into().into(),
-				account_lookup,
-				amount,
-			)
-			.map_err(|_| Error::<T>::NotEnoughFunds1)?)
-		}
+			if !amount.is_zero() {
+				T::ForeignCurrency::transfer(asset, &from, &to, amount, Preservation::Expendable)
+					.map_err(|_| Error::<T>::NotEnoughFunds1);
+			}
+			Ok(())
+		} 
 	}
 }
 
