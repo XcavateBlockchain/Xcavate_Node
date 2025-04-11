@@ -398,7 +398,7 @@ impl pallet_balances::Config for Runtime {
 	type RuntimeFreezeReason = RuntimeFreezeReason;
 	type FreezeIdentifier = RuntimeFreezeReason;
 	type MaxFreezes = ConstU32<1>;
-	type MaxHolds = ConstU32<2>;
+	type MaxHolds = ConstU32<3>;
 }
 
 parameter_types! {
@@ -489,7 +489,8 @@ parameter_types! {
 impl pallet_property_management::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_property_management::weights::SubstrateWeight<Runtime>;
-	type Currency = Balances;
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type NativeCurrency = Balances;
 	type PalletId = PropertyManagementPalletId;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = pallet_property_management::AssetHelper;
@@ -500,7 +501,6 @@ impl pallet_property_management::Config for Runtime {
 	type MaxLocations = MaxLocation;
 	type GovernanceId = PropertyGovernancePalletId;
 	type PropertyReserve = PropertyReserves;
-	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PolkadotJsMultiplier = PolkadotJsMultiply;
 }
 

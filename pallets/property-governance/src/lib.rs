@@ -17,8 +17,7 @@ use frame_support::{
 	sp_runtime::{traits::AccountIdConversion, Saturating, Percent},
 	traits::{
 		tokens::fungible,
-		fungible::{Mutate, Inspect, MutateHold},
-		Currency, ExistenceRequirement::KeepAlive, OnUnbalanced, ReservableCurrency,
+		fungible::{Mutate, MutateHold},
 		tokens::{Preservation, Fortitude, Precision, Restriction},
 	},
 	PalletId,
@@ -577,7 +576,7 @@ pub mod pallet {
 			let letting_agent =
 				pallet_property_management::LettingStorage::<T>::get(challenge.asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
 			let amount = <T as Config>::MinSlashingAmount::get();
-			let slashed_amount = <T as pallet::Config>::NativeCurrency::transfer_on_hold(
+			let _slashed_amount = <T as pallet::Config>::NativeCurrency::transfer_on_hold(
 				&HoldReason::LettingAgent.into(),
 				&letting_agent, 
 				&Self::account_id(),

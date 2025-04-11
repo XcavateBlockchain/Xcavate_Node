@@ -14,7 +14,13 @@ pub mod weights;
 pub use weights::*;
 
 use frame_support::{
-	traits::{Currency, ExistenceRequirement::KeepAlive, ReservableCurrency},
+	traits::{
+		tokens::fungible,
+		fungible::{Mutate, Inspect, MutateHold},
+		Currency, ExistenceRequirement::KeepAlive, OnUnbalanced, ReservableCurrency,
+		tokens::{Preservation, Fortitude, Precision, Restriction},
+	},
+
 	PalletId,
 };
 
@@ -23,18 +29,12 @@ use frame_support::sp_runtime::{
 	Saturating,
 };
 
-use pallet_assets::Instance1;
-
 use codec::Codec;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
 
-pub type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-
-pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::NegativeImbalance;
+pub type Balance = u128;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -44,6 +44,14 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
+
+	/// A reason for the pallet placing a hold on funds.
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		/// Funds are held to register for free transactions.
+		#[codec(index = 0)]
+		LettingAgent,
+	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	pub struct AssetHelper;
@@ -77,7 +85,6 @@ pub mod pallet {
 		frame_system::Config
 		+ pallet_xcavate_whitelist::Config
 		+ pallet_nft_marketplace::Config
-		+ pallet_assets::Config<Instance1>
 	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -85,8 +92,15 @@ pub mod pallet {
 		/// Type representing the weight of this pallet.
 		type WeightInfo: WeightInfo;
 
+		/// The overarching hold reason.
+		type RuntimeHoldReason: From<HoldReason>;
+
 		/// The reservable currency type.
-		type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
+		type NativeCurrency: fungible::Inspect<AccountIdOf<Self>>
+			+ fungible::Mutate<AccountIdOf<Self>>
+			+ fungible::InspectHold<AccountIdOf<Self>, Balance = Balance>
+			+ fungible::MutateHold<AccountIdOf<Self>, Balance = Balance, Reason = RuntimeHoldReasonOf<Self>>
+			+ fungible::BalancedHold<AccountIdOf<Self>, Balance = Balance>;
 
 		/// The property management's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
@@ -102,7 +116,7 @@ pub mod pallet {
 		type AgentOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
 		/// The minimum amount of a letting agent that has to be staked.
-		type LettingAgentDeposit: Get<BalanceOf<Self>>;
+		type LettingAgentDeposit: Get<Balance>;
 
 		/// The maximum amount of properties that can be assigned to a letting agent.
 		#[pallet::constant]
@@ -121,20 +135,11 @@ pub mod pallet {
 		type GovernanceId: Get<PalletId>;
 
 		/// The reserve a property needs to have.
-		type PropertyReserve: Get<BalanceOf<Self>>;
-
-		/// Asset id type from pallet assets.
-		type AssetId: IsType<<Self as pallet_assets::Config<Instance1>>::AssetId>
-			+ Parameter
-			+ From<u32>
-			+ Ord
-			+ Copy;
+		type PropertyReserve: Get<Balance>;
 
 		/// Multiplier for polkadot js.
-		type PolkadotJsMultiplier: Get<BalanceOf<Self>>;
+		type PolkadotJsMultiplier: Get<Balance>;
 	}
-
-	pub type AssetId<T> = <T as Config>::AssetId;
 
 	pub type LocationId<T> = BoundedVec<u8, <T as pallet_nft_marketplace::Config>::PostcodeLimit>;
 
@@ -145,17 +150,17 @@ pub mod pallet {
 	/// Mapping from account to currently stored balance.
 	#[pallet::storage]
 	pub type StoredFunds<T> =
-		StorageMap<_, Blake2_128Concat, AccountIdOf<T>, BalanceOf<T>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, AccountIdOf<T>, Balance, ValueQuery>;
 
 	/// Mapping of asset id to the stored balance for a property.
 	#[pallet::storage]
 	pub type PropertyReserve<T> =
-		StorageMap<_, Blake2_128Concat, u32, BalanceOf<T>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, u32, Balance, ValueQuery>;
 
 	/// Mapping of asset id to the stored debts of a property.
 	#[pallet::storage]
 	pub type PropertyDebts<T> =
-		StorageMap<_, Blake2_128Concat, u32, BalanceOf<T>, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, u32, Balance, ValueQuery>;
 
 	/// Mapping from account to letting agent info
 	#[pallet::storage]
@@ -186,9 +191,9 @@ pub mod pallet {
 		/// A letting agent has been added to a property.
 		LettingAgentSet { asset_id: u32, who: T::AccountId },
 		/// The rental income has been distributed.
-		IncomeDistributed { asset_id: u32, amount: BalanceOf<T> },
+		IncomeDistributed { asset_id: u32, amount: Balance },
 		/// A user withdrew funds.
-		WithdrawFunds { who: T::AccountId, amount: BalanceOf<T> },
+		WithdrawFunds { who: T::AccountId, amount: Balance },
 	}
 
 	#[pallet::error]
@@ -314,10 +319,12 @@ pub mod pallet {
 					.contains(&signer),
 					Error::<T>::LettingAgentInLocation
 				);
-				<T as pallet::Config>::Currency::reserve(
-					&signer,
+				<T as pallet::Config>::NativeCurrency::hold(
+					&HoldReason::LettingAgent.into(),
+					&signer, 
 					<T as Config>::LettingAgentDeposit::get(),
 				)?;
+
 				letting_info.deposited = true;
 				LettingAgentLocations::<T>::try_mutate(
 					letting_info.region,
@@ -431,57 +438,57 @@ pub mod pallet {
 		pub fn distribute_income(
 			origin: OriginFor<T>,
 			asset_id: u32,
-			amount: BalanceOf<T>,
+			amount: Balance,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let letting_agent = LettingStorage::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
 			ensure!(letting_agent == signer, Error::<T>::NoPermission);
 		
 			let scaled_amount = amount
-				.checked_mul(&Self::u64_to_balance_option(1)?)  // Modify the scale factor if needed
+				.checked_mul(1)  // Modify the scale factor if needed
 				.ok_or(Error::<T>::MultiplyError)?;
 		
-			<T as pallet::Config>::Currency::transfer(
+			<T as pallet::Config>::NativeCurrency::transfer(
 				&signer,
 				&Self::account_id(),
 				scaled_amount.saturating_mul(
 					<T as Config>::PolkadotJsMultiplier::get(),
 				),
-				KeepAlive,
+				Preservation::Expendable,
 			).map_err(|_| Error::<T>::NotEnoughFunds)?;
 		
 			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
-			let mut governance_amount = BalanceOf::<T>::zero();
+			let mut governance_amount = Balance::zero();
 			let property_reserve = PropertyReserve::<T>::get(asset_id);
 			let property_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id)
 				.ok_or(Error::<T>::NoObjectFound)?;
 			let property_price = property_info.price;
 		
-			let property_price_converted: BalanceOf<T> = TryInto::<u64>::try_into(property_price)
+			let property_price_converted: Balance = TryInto::<u64>::try_into(property_price)
 				.map_err(|_| Error::<T>::ConversionError)?
 				.try_into()
 				.map_err(|_| Error::<T>::ConversionError)?;
 		
 			let required_reserve = property_price_converted
-				.checked_div(&Self::u64_to_balance_option(25)?)
+				.checked_div(25)
 				.ok_or(Error::<T>::DivisionError)?
-				.checked_div(&Self::u64_to_balance_option(12)?)
+				.checked_div(12)
 				.ok_or(Error::<T>::DivisionError)?;
 		
 			let property_debts = PropertyDebts::<T>::get(asset_id);
 		
 			// Pay property debts first
 			let amount_to_pay_debts = core::cmp::min(amount, property_debts);
-			if amount_to_pay_debts > BalanceOf::<T>::zero() {
-				<T as pallet::Config>::Currency::transfer(
+			if amount_to_pay_debts > Balance::zero() {
+				<T as pallet::Config>::NativeCurrency::transfer(
 					&Self::account_id(),
-					&letting_agent,
+					&Self::account_id(),
 					amount_to_pay_debts.saturating_mul(
 						<T as Config>::PolkadotJsMultiplier::get(),
 					),
-					KeepAlive,
+					Preservation::Expendable,
 				).map_err(|_| Error::<T>::NotEnoughFunds)?;
-				let new_debts = property_debts.checked_sub(&amount_to_pay_debts)
+				let new_debts = property_debts.checked_sub(amount_to_pay_debts)
 					.ok_or(Error::<T>::ArithmeticUnderflow)?;
 				PropertyDebts::<T>::insert(asset_id, new_debts);
 		
@@ -496,24 +503,24 @@ pub mod pallet {
 				let missing_amount = required_reserve.saturating_sub(property_reserve);
 				let reserve_amount = core::cmp::min(remaining_amount, missing_amount);
 		
-				if reserve_amount > BalanceOf::<T>::zero() {
-					<T as pallet::Config>::Currency::transfer(
+				if reserve_amount > Balance::zero() {
+					<T as pallet::Config>::NativeCurrency::transfer(
 						&Self::account_id(),
 						&Self::governance_account_id(),
 						reserve_amount.saturating_mul(
 							<T as Config>::PolkadotJsMultiplier::get(),
 						),
-						KeepAlive,
+						Preservation::Expendable,
 					).map_err(|_| Error::<T>::NotEnoughFunds)?;
 		
 					let new_property_reserve = property_reserve
-						.checked_add(&reserve_amount)
+						.checked_add(reserve_amount)
 						.ok_or(Error::<T>::ArithmeticOverflow)?;
 					PropertyReserve::<T>::insert(asset_id, new_property_reserve);
 				}
 		
 				governance_amount = governance_amount
-					.checked_add(&reserve_amount)
+					.checked_add(reserve_amount)
 					.ok_or(Error::<T>::ArithmeticOverflow)?;
 			}
 		
@@ -526,13 +533,13 @@ pub mod pallet {
 					owner.clone(),
 				);
 				let amount_for_owner = Self::u64_to_balance_option(token_amount as u64)?
-					.checked_mul(&final_remaining_amount)
+					.checked_mul(final_remaining_amount)
 					.ok_or(Error::<T>::MultiplyError)?
-					.checked_div(&Self::u64_to_balance_option(total_token.into())?)
+					.checked_div(Self::u64_to_balance_option(total_token.into())?)
 					.ok_or(Error::<T>::DivisionError)?;
 				StoredFunds::<T>::try_mutate(owner.clone(), |old_funds| {
 					*old_funds = old_funds
-					.checked_add(&amount_for_owner)
+					.checked_add(amount_for_owner)
 					.ok_or(Error::<T>::ArithmeticOverflow)?;
 					Ok::<(), DispatchError>(())
 				})?;
@@ -559,15 +566,14 @@ pub mod pallet {
 				!amount.is_zero(),
 				Error::<T>::UserHasNoFundsStored
 			);
-			<T as pallet::Config>::Currency::transfer(
+			<T as pallet::Config>::NativeCurrency::transfer(
 				&Self::account_id(),
 				&signer,
 				amount.saturating_mul(
 					<T as Config>::PolkadotJsMultiplier::get(),
 				),
-				KeepAlive,
-			)
-			.map_err(|_| Error::<T>::NotEnoughFunds)?;
+				Preservation::Expendable,
+			).map_err(|_| Error::<T>::NotEnoughFunds)?;
 			Self::deposit_event(Event::<T>::WithdrawFunds { who: signer, amount });
 			Ok(())
 		}
@@ -585,7 +591,7 @@ pub mod pallet {
 		}
 
 		/// Converts a u64 to a balance.
-		pub fn u64_to_balance_option(input: u64) -> Result<BalanceOf<T>, Error<T>> {
+		pub fn u64_to_balance_option(input: u64) -> Result<Balance, Error<T>> {
 			input.try_into().map_err(|_| Error::<T>::ConversionError)
 		}
 
@@ -598,7 +604,7 @@ pub mod pallet {
 		}
 
 		/// Decreases the reserve of a property.
-		pub fn decrease_reserves(asset_id: u32, amount: BalanceOf<T>) -> DispatchResult {
+		pub fn decrease_reserves(asset_id: u32, amount: Balance) -> DispatchResult {
 			PropertyReserve::<T>::try_mutate(asset_id, |property_reserve| -> Result<(), DispatchError> {
 				ensure!(*property_reserve >= amount, Error::<T>::NotEnoughReserves);
 				*property_reserve = property_reserve.saturating_sub(amount);				
@@ -607,7 +613,7 @@ pub mod pallet {
 		}
 
 		/// Increases the debts of a property.
-		pub fn increase_debts(asset_id: u32, amount: BalanceOf<T>) -> DispatchResult {
+		pub fn increase_debts(asset_id: u32, amount: Balance) -> DispatchResult {
 			PropertyDebts::<T>::try_mutate(asset_id, |property_debts| {
 				*property_debts = property_debts.saturating_add(amount);
 				Ok(())

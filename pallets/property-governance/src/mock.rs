@@ -262,7 +262,8 @@ parameter_types! {
 impl pallet_property_management::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_property_management::weights::SubstrateWeight<Test>;
-	type Currency = Balances;
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type NativeCurrency = Balances;
 	type PalletId = PropertyManagementPalletId;
 	type AgentOrigin = EnsureRoot<Self::AccountId>;
 	type LettingAgentDeposit = ConstU128<100>;
@@ -271,7 +272,6 @@ impl pallet_property_management::Config for Test {
 	type MaxLocations = MaxLocation;
 	type GovernanceId = PropertyGovernancePalletId;
 	type PropertyReserve = ConstU128<3000>;
-	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PolkadotJsMultiplier = ConstU128<1>;
 }
 
