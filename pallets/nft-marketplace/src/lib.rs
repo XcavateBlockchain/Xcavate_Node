@@ -14,12 +14,9 @@ mod benchmarking;
 pub mod weights;
 pub use weights::*;
 
-use pallet_assets::{Instance1, Instance2};
-
 use frame_support::{
 	traits::{
 		tokens::{fungible, fungibles},
-		fungible::{Mutate, Inspect},
 		fungibles::Mutate as FungiblesMutate,
 		fungibles::Inspect as FungiblesInspect,
 		Currency, Incrementable,
@@ -33,7 +30,6 @@ use frame_support::sp_runtime::{
 	traits::{
 		AccountIdConversion, CheckedAdd, CheckedSub, CheckedDiv, CheckedMul, StaticLookup, Zero,
 	},
-	Saturating,
 };
 
 use enumflags2::BitFlags;
@@ -48,7 +44,6 @@ use codec::Codec;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 
-type AssetBalanceOf<T> = <T as pallet_assets::Config<pallet_assets::Instance2>>::Balance;
 pub type Balance = u128;
 
 pub type LocalAssetIdOf<T> =
@@ -241,8 +236,6 @@ pub mod pallet {
 		frame_system::Config
 		+ pallet_nfts::Config
 		+ pallet_xcavate_whitelist::Config
-		+ pallet_assets::Config<Instance1>
-		+ pallet_assets::Config<Instance2>
 		+ pallet_nft_fractionalization::Config
 	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
@@ -328,12 +321,6 @@ pub mod pallet {
 			+ From<u32>
 			+ Ord
 			+ Copy;
-		
-		type AssetId3: IsType<<Self as pallet_assets::Config<Instance2>>::AssetId>
-			+ Parameter
-			+ From<u32>
-			+ Ord
-			+ Copy;
 
 		/// The Trasury's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
@@ -353,7 +340,6 @@ pub mod pallet {
 	}
 
 	pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
-	pub type ForeignAssetId<T> = <T as Config>::AssetId3;
 	pub type CollectionId<T> = <T as Config>::CollectionId;
 	pub type ItemId<T> = <T as Config>::ItemId;
 	pub type FractionalizeCollectionId<T> = <T as Config>::FractionalizeCollectionId;
@@ -570,8 +556,6 @@ pub mod pallet {
 		InvalidIndex,
 		/// The buyer doesn't have enough funds.
 		NotEnoughFunds,
-		NotEnoughFunds1,
-		NotEnoughFunds2,
 		/// Not enough token available to buy.
 		NotEnoughTokenAvailable,
 		/// Error by converting a type.
@@ -1813,7 +1797,7 @@ pub mod pallet {
 			price: Balance,
 			sender: AccountIdOf<T>,
 			receiver: AccountIdOf<T>,
-			asset: ForeignAssetIdOf<T>,
+			asset: u32,
 		) -> DispatchResult {
 			let fees = price
 				.checked_div(100u128)
@@ -1863,7 +1847,7 @@ pub mod pallet {
 			from: AccountIdOf<T>,
 			to: AccountIdOf<T>,
 			amount: Balance,
-			asset: ForeignAssetIdOf<T>,
+			asset: u32,
 		) -> DispatchResult {
 			if !amount.is_zero() {
 				T::ForeignCurrency::transfer(asset, &from, &to, amount, Preservation::Expendable)
@@ -1871,19 +1855,6 @@ pub mod pallet {
 			}
 			Ok(())
 		}
-
- 		fn transfer_funds1(
-			from: AccountIdOf<T>,
-			to: AccountIdOf<T>,
-			amount: Balance,
-			asset: u32,
-		) -> DispatchResult {
-			if !amount.is_zero() {
-				T::ForeignCurrency::transfer(asset, &from, &to, amount, Preservation::Expendable)
-					.map_err(|_| Error::<T>::NotEnoughFunds1);
-			}
-			Ok(())
-		} 
 	}
 }
 

@@ -15,22 +15,21 @@ pub use weights::*;
 
 use frame_support::{
 	sp_runtime::{traits::AccountIdConversion, Saturating, Percent},
-	traits::{Currency, ExistenceRequirement::KeepAlive, OnUnbalanced, ReservableCurrency},
+	traits::{
+		tokens::fungible,
+		fungible::{Mutate, Inspect, MutateHold},
+		Currency, ExistenceRequirement::KeepAlive, OnUnbalanced, ReservableCurrency,
+		tokens::{Preservation, Fortitude, Precision, Restriction},
+	},
 	PalletId,
 };
-
-use pallet_assets::Instance1;
 
 use codec::Codec;
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
 
-pub type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::NegativeImbalance;
-
-pub type BalanceOf<T> =
-	<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+pub type Balance = u128;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -40,6 +39,14 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
+
+	/// A reason for the pallet placing a hold on funds.
+	#[pallet::composite_enum]
+	pub enum HoldReason {
+		/// Funds are held to register for free transactions.
+		#[codec(index = 0)]
+		LettingAgent,
+	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	pub struct AssetHelper;
@@ -66,7 +73,7 @@ pub mod pallet {
 	pub struct Proposal<T: Config> {
 		pub proposer: AccountIdOf<T>,
 		pub asset_id: u32,
-		pub amount: BalanceOf<T>,
+		pub amount: Balance,
 		pub created_at: BlockNumberFor<T>,
 		pub proposal_info: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
 	}
@@ -78,7 +85,7 @@ pub mod pallet {
 	pub struct SellProposal<T: Config> {
 		pub proposer: AccountIdOf<T>,
 		pub asset_id: u32,
-		pub amount: BalanceOf<T>,
+		pub amount: Balance,
 		pub created_at: BlockNumberFor<T>,
 	}
 
@@ -124,7 +131,6 @@ pub mod pallet {
 		frame_system::Config
 		+ pallet_nft_marketplace::Config
 		+ pallet_property_management::Config
-		+ pallet_assets::Config<Instance1>
 	{
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -132,8 +138,15 @@ pub mod pallet {
 		/// Type representing the weight of this pallet.
 		type WeightInfo: WeightInfo;
 
+		/// The overarching hold reason.
+		type RuntimeHoldReason: From<HoldReason>;
+
 		/// The reservable currency type.
-		type Currency: Currency<Self::AccountId> + ReservableCurrency<Self::AccountId>;
+		type NativeCurrency: fungible::Inspect<AccountIdOf<Self>>
+			+ fungible::Mutate<AccountIdOf<Self>>
+			+ fungible::InspectHold<AccountIdOf<Self>, Balance = Balance>
+			+ fungible::MutateHold<AccountIdOf<Self>, Balance = Balance, Reason = RuntimeHoldReasonOf<Self>>
+			+ fungible::BalancedHold<AccountIdOf<Self>, Balance = Balance>;
 
 		/// The amount of time given to vote for a proposal.
 		type VotingTime: Get<BlockNumberFor<Self>>;
@@ -141,11 +154,8 @@ pub mod pallet {
 		/// The maximum amount of votes per block.
 		type MaxVotesForBlock: Get<u32>;
 
-		/// Handler for the unbalanced reduction when slashing a letting agent.
-		type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
-
 		/// The minimum amount of a letting agent that will be slashed.
-		type MinSlashingAmount: Get<BalanceOf<Self>>;
+		type MinSlashingAmount: Get<Balance>;
 
 		/// The maximum amount of users who can vote on an ongoing voting.
 		type MaxVoter: Get<u32>;
@@ -163,27 +173,18 @@ pub mod pallet {
 		>;
 
 		/// Proposal amount to be considered a low proposal.
-		type LowProposal: Get<BalanceOf<Self>>;
+		type LowProposal: Get<Balance>;
 
 		/// Proposal amount to be considered a high proposal.
-		type HighProposal: Get<BalanceOf<Self>>;
+		type HighProposal: Get<Balance>;
 
 		/// The property governance's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
 		type PalletId: Get<PalletId>;
 
-		/// Asset id type from pallet assets.
-		type AssetId: IsType<<Self as pallet_assets::Config<Instance1>>::AssetId>
-			+ Parameter
-			+ From<u32>
-			+ Ord
-			+ Copy;
-
 		/// Multiplier for polkadot js.
-		type PolkadotJsMultiplier: Get<BalanceOf<Self>>;
+		type PolkadotJsMultiplier: Get<Balance>;
 	}
-
-	pub type AssetId<T> = <T as Config>::AssetId;
 
 	/// Number of proposals that have been made.
 	#[pallet::storage]
@@ -309,9 +310,9 @@ pub mod pallet {
 		/// Voted on challenge.
 		VotedOnChallenge { challenge_id: ChallengeIndex, voter: AccountIdOf<T>, vote: Vote },
 		/// The proposal has been executed.
-		ProposalExecuted { asset_id: u32, amount: BalanceOf<T> },
+		ProposalExecuted { asset_id: u32, amount: Balance },
 		/// The agent got slashed.
-		AgentSlashed { challenge_id: ChallengeIndex, amount: BalanceOf<T> },
+		AgentSlashed { challenge_id: ChallengeIndex, amount: Balance },
 		/// The agent has been changed.
 		AgentChanged { challenge_id: ChallengeIndex, asset_id: u32 },
 		/// A proposal got rejected.
@@ -384,7 +385,7 @@ pub mod pallet {
 		pub fn propose(
 			origin: OriginFor<T>,
 			asset_id: u32,
-			amount: BalanceOf<T>,
+			amount: Balance,
 			data: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -576,9 +577,16 @@ pub mod pallet {
 			let letting_agent =
 				pallet_property_management::LettingStorage::<T>::get(challenge.asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
 			let amount = <T as Config>::MinSlashingAmount::get();
-			<T as pallet::Config>::Slash::on_unbalanced(
-				<T as pallet::Config>::Currency::slash_reserved(&letting_agent, amount).0,
-			);
+			let slashed_amount = <T as pallet::Config>::NativeCurrency::transfer_on_hold(
+				&HoldReason::LettingAgent.into(),
+				&letting_agent, 
+				&Self::account_id(),
+				amount,
+				Precision::Exact,
+				Restriction::Free,
+				Fortitude::Force,
+			)?;
+			
 			challenge.state = ChallengeState::Fourth;
 			let vote_stats = VoteStats { yes_voting_power: 0, no_voting_power: 0 };
 			OngoingChallengeVotes::<T>::insert(challenge_id, challenge.state.clone(), vote_stats);
@@ -706,7 +714,7 @@ pub mod pallet {
 					.ok_or(Error::<T>::NoLettingAgentFound)?;
 		
 			let property_reserves_balances = pallet_property_management::PropertyReserve::<T>::get(proposal.asset_id);
-			let property_reserves: BalanceOf<T> = TryInto::<u64>::try_into(property_reserves_balances)
+			let property_reserves: Balance = TryInto::<u64>::try_into(property_reserves_balances)
 				.map_err(|_| Error::<T>::ConversionError)?
 				.try_into()
 				.map_err(|_| Error::<T>::ConversionError)?;
@@ -715,14 +723,15 @@ pub mod pallet {
 			// Check if the property reserves cover the proposal amount
 			if property_reserves >= proposal_amount {
 				// Transfer the full proposal amount from the reserves
-				<T as pallet::Config>::Currency::transfer(
+				<T as pallet::Config>::NativeCurrency::transfer(
 					&Self::account_id(),
 					&letting_agent,
 					proposal_amount.saturating_mul(
 						<T as Config>::PolkadotJsMultiplier::get(),
 					),
-					KeepAlive,
-				).map_err(|_| Error::<T>::NotEnoughFunds)?;
+					Preservation::Expendable
+				)
+				.map_err(|_| Error::<T>::NotEnoughFunds)?;
 		
 				// Decrease the reserves by the proposal amount
 				pallet_property_management::Pallet::<T>::decrease_reserves(
@@ -734,14 +743,15 @@ pub mod pallet {
 				)?;
 			} else {
 				// Transfer only the available property reserves
-				<T as pallet::Config>::Currency::transfer(
+				<T as pallet::Config>::NativeCurrency::transfer(
 					&Self::account_id(),
 					&letting_agent,
-					property_reserves.saturating_mul(
+					proposal_amount.saturating_mul(
 						<T as Config>::PolkadotJsMultiplier::get(),
 					),
-					KeepAlive,
-				).map_err(|_| Error::<T>::NotEnoughFunds)?;
+					Preservation::Expendable
+				)
+				.map_err(|_| Error::<T>::NotEnoughFunds)?;
 		
 				// Calculate the remaining amount needed
 				let remaining_amount = proposal_amount.saturating_sub(property_reserves);

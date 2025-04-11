@@ -456,7 +456,6 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
-	type AssetId3 = u32;
 	type PostcodeLimit = Postcode;
 	type MaxPaymentOptions = MaxPaymentOption;
 }
@@ -521,10 +520,10 @@ parameter_types! {
 impl pallet_property_governance::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_property_governance::weights::SubstrateWeight<Runtime>;
-	type Currency = Balances;
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type NativeCurrency = Balances;
 	type VotingTime = PropertyVotingTime;
 	type MaxVotesForBlock = MaxVoteForBlock;
-	type Slash = ();
 	type MinSlashingAmount = MinimumSlashingAmount;
 	type MaxVoter = MaximumVoter;
 	type Threshold = VotingThreshold;
@@ -534,7 +533,6 @@ impl pallet_property_governance::Config for Runtime {
 	type LowProposal = LowProposal;
 	type HighProposal = HighProposal;
 	type PalletId = PropertyGovernancePalletId;
-	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PolkadotJsMultiplier = PolkadotJsMultiply;
 }
 

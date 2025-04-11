@@ -2,7 +2,7 @@ use super::*;
 
 use crate as pallet_property_governance;
 use frame_support::{parameter_types, traits::AsEnsureOriginWithArg, BoundedVec, PalletId};
-use sp_core::ConstU32;
+use sp_core::{ConstU32, ConstU128};
 use sp_runtime::{
 	traits::{AccountIdLookup, BlakeTwo256, IdentifyAccount, Verify},
 	MultiSignature,
@@ -70,7 +70,7 @@ impl frame_system::Config for Test {
 	type BlockHashCount = BlockHashCount;
 	type Version = ();
 	type PalletInfo = PalletInfo;
-	type AccountData = pallet_balances::AccountData<u32>;
+	type AccountData = pallet_balances::AccountData<u128>;
 	type OnNewAccount = ();
 	type OnKilledAccount = ();
 	type DbWeight = ();
@@ -85,10 +85,10 @@ impl frame_system::Config for Test {
 }
 
 impl pallet_balances::Config for Test {
-	type Balance = u32;
+	type Balance = u128;
 	type DustRemoval = ();
 	type RuntimeEvent = RuntimeEvent;
-	type ExistentialDeposit = ConstU32<1>;
+	type ExistentialDeposit = ConstU128<1>;
 	type AccountStore = System;
 	type WeightInfo = ();
 	type MaxLocks = ();
@@ -119,11 +119,11 @@ impl pallet_nfts::Config for Test {
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
 	type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
 	type Locker = ();
-	type CollectionDeposit = ConstU32<2>;
-	type ItemDeposit = ConstU32<1>;
-	type MetadataDepositBase = ConstU32<1>;
-	type AttributeDepositBase = ConstU32<1>;
-	type DepositPerByte = ConstU32<1>;
+	type CollectionDeposit = ConstU128<2>;
+	type ItemDeposit = ConstU128<1>;
+	type MetadataDepositBase = ConstU128<1>;
+	type AttributeDepositBase = ConstU128<1>;
+	type DepositPerByte = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
 	type KeyLimit = ConstU32<50>;
 	type ValueLimit = ConstU32<50>;
@@ -145,17 +145,17 @@ parameter_types! {
 
 impl pallet_assets::Config<Instance1> for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Balance = u32;
+	type Balance = u128;
 	type AssetId = u32;
 	type AssetIdParameter = codec::Compact<u32>;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
 	type ForceOrigin = EnsureRoot<AccountId>;
-	type AssetDeposit = ConstU32<1>;
-	type AssetAccountDeposit = ConstU32<1>;
-	type MetadataDepositBase = ConstU32<1>;
-	type MetadataDepositPerByte = ConstU32<1>;
-	type ApprovalDeposit = ConstU32<1>;
+	type AssetDeposit = ConstU128<1>;
+	type AssetAccountDeposit = ConstU128<1>;
+	type MetadataDepositBase = ConstU128<1>;
+	type MetadataDepositPerByte = ConstU128<1>;
+	type ApprovalDeposit = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
 	type Extra = ();
@@ -166,17 +166,17 @@ impl pallet_assets::Config<Instance1> for Test {
 
 impl pallet_assets::Config<Instance2> for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Balance = u32;
+	type Balance = u128;
 	type AssetId = u32;
 	type AssetIdParameter = codec::Compact<u32>;
 	type Currency = Balances;
 	type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
 	type ForceOrigin = EnsureRoot<AccountId>;
-	type AssetDeposit = ConstU32<1>;
-	type AssetAccountDeposit = ConstU32<1>;
-	type MetadataDepositBase = ConstU32<1>;
-	type MetadataDepositPerByte = ConstU32<1>;
-	type ApprovalDeposit = ConstU32<1>;
+	type AssetDeposit = ConstU128<1>;
+	type AssetAccountDeposit = ConstU128<1>;
+	type MetadataDepositBase = ConstU128<1>;
+	type MetadataDepositPerByte = ConstU128<1>;
+	type ApprovalDeposit = ConstU128<1>;
 	type StringLimit = ConstU32<50>;
 	type Freezer = ();
 	type Extra = ();
@@ -193,7 +193,7 @@ parameter_types! {
 
 impl pallet_nft_fractionalization::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
-	type Deposit = ConstU32<1>;
+	type Deposit = ConstU128<1>;
 	type Currency = Balances;
 	type NewAssetSymbol = NewAssetSymbol;
 	type NewAssetName = NewAssetName;
@@ -234,7 +234,9 @@ parameter_types! {
 impl pallet_nft_marketplace::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_nft_marketplace::weights::SubstrateWeight<Test>;
-	type Currency = Balances;
+	type NativeCurrency = Balances;
+	type LocalCurrency = LocalAssets;
+	type ForeignCurrency = ForeignAssets;
 	type PalletId = NftMarketplacePalletId;
 	type MaxNftToken = MaxNftTokens;
 	type LocationOrigin = EnsureRoot<Self::AccountId>;
@@ -245,8 +247,6 @@ impl pallet_nft_marketplace::Config for Test {
 	type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
-	type AssetId2 = u32;
-	type AssetId3 = u32;
 	type PostcodeLimit = Postcode;
 	type MaxPaymentOptions = MaxPaymentOption;
 }
@@ -265,14 +265,14 @@ impl pallet_property_management::Config for Test {
 	type Currency = Balances;
 	type PalletId = PropertyManagementPalletId;
 	type AgentOrigin = EnsureRoot<Self::AccountId>;
-	type LettingAgentDeposit = ConstU32<100>;
+	type LettingAgentDeposit = ConstU128<100>;
 	type MaxProperties = MaxProperty;
 	type MaxLettingAgents = MaxLettingAgent;
 	type MaxLocations = MaxLocation;
 	type GovernanceId = PropertyGovernancePalletId;
-	type PropertyReserve = ConstU32<3000>;
+	type PropertyReserve = ConstU128<3000>;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
-	type PolkadotJsMultiplier = ConstU32<1>;
+	type PolkadotJsMultiplier = ConstU128<1>;
 }
 
 parameter_types! {
@@ -288,21 +288,20 @@ parameter_types! {
 impl pallet_property_governance::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = weights::SubstrateWeight<Test>;
-	type Currency = Balances;
+	type RuntimeHoldReason = RuntimeHoldReason;
+	type NativeCurrency = Balances;
 	type VotingTime = PropertyVotingTime;
 	type MaxVotesForBlock = MaxVoteForBlock;
-	type Slash = ();
-	type MinSlashingAmount = ConstU32<100>;
+	type MinSlashingAmount = ConstU128<100>;
 	type MaxVoter = MaximumVoter;
 	type Threshold = VotingThreshold;
 	type HighThreshold = HighVotingThreshold;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = AssetHelper;
-	type LowProposal = ConstU32<500>;
-	type HighProposal = ConstU32<2000>;
+	type LowProposal = ConstU128<500>;
+	type HighProposal = ConstU128<2000>;
 	type PalletId = PropertyGovernancePalletId;
-	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
-	type PolkadotJsMultiplier = ConstU32<1>;
+	type PolkadotJsMultiplier = ConstU128<1>;
 }
 
 // Build genesis storage according to the mock runtime.

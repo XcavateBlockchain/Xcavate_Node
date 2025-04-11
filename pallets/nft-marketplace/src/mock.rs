@@ -14,6 +14,8 @@ use sp_runtime::BuildStorage;
 
 use pallet_nfts::PalletFeatures;
 
+use pallet_assets::{Instance1, Instance2};
+
 pub type Block = frame_system::mocking::MockBlock<Test>;
 
 pub type BlockNumber = u64;
@@ -245,7 +247,6 @@ impl pallet_nft_marketplace::Config for Test {
 	type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;
 	type FractionalizeItemId = <Self as pallet_nfts::Config>::ItemId;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
-	type AssetId3 = u32;
 	type PostcodeLimit = Postcode;
 	type MaxPaymentOptions = MaxPaymentOption;
 }
