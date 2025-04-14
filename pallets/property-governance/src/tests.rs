@@ -64,7 +64,8 @@ fn propose_works() {
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([2; 32].into()),
 			0,
-			1000
+			1000,
+			PaymentAssets::USDT,
 		));
 		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
 		assert_ok!(PropertyGovernance::propose(
@@ -110,7 +111,8 @@ fn proposal_with_low_amount_works() {
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([4; 32].into()),
 			0,
-			1000
+			1000,
+			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
 			RuntimeOrigin::signed([4; 32].into()),
@@ -356,7 +358,8 @@ fn vote_on_proposal_works() {
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([0; 32].into()),
 			0,
-			1000
+			1000,
+			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
 			RuntimeOrigin::signed([0; 32].into()),
@@ -444,7 +447,8 @@ fn proposal_pass() {
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([0; 32].into()),
 			0,
-			1000
+			1000,
+			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
 			RuntimeOrigin::signed([0; 32].into()),
@@ -458,11 +462,11 @@ fn proposal_pass() {
 			crate::Vote::Yes
 		));
 		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
 		run_to_block(31);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 500_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 0);
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
@@ -525,7 +529,8 @@ fn proposal_pass_2() {
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([0; 32].into()),
 			0,
-			1000
+			1000,
+			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
 			RuntimeOrigin::signed([0; 32].into()),
@@ -544,11 +549,11 @@ fn proposal_pass_2() {
 			crate::Vote::Yes
 		));
 		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
 		run_to_block(31);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 500_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 0);
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
@@ -557,7 +562,8 @@ fn proposal_pass_2() {
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([0; 32].into()),
 			0,
-			3000
+			3000,
+			PaymentAssets::USDT,
 		));
 		assert_eq!(PropertyDebts::<Test>::get(0), 6000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 0);
@@ -620,7 +626,8 @@ fn proposal_not_pass() {
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([0; 32].into()),
 			0,
-			1000
+			1000,
+			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
 			RuntimeOrigin::signed([0; 32].into()),
@@ -634,11 +641,11 @@ fn proposal_not_pass() {
 			crate::Vote::No
 		));
 		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
 		run_to_block(31);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
@@ -703,7 +710,8 @@ fn proposal_not_pass_2() {
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([0; 32].into()),
 			0,
-			1000
+			1000,
+			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
 			RuntimeOrigin::signed([0; 32].into()),
@@ -718,13 +726,13 @@ fn proposal_not_pass_2() {
 		));
 		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
 		assert_eq!(Proposals::<Test>::get(1).unwrap().amount, 10000);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
 		run_to_block(31);
 		System::assert_last_event(Event::ProposalThresHoldNotReached{ proposal_id: 1, required_threshold: Percent::from_percent(67)}.into());
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
 	});
@@ -793,7 +801,8 @@ fn vote_on_proposal_fails() {
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([0; 32].into()),
 			0,
-			1000
+			1000,
+			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
 			RuntimeOrigin::signed([0; 32].into()),
@@ -1498,7 +1507,8 @@ fn different_proposals() {
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([0; 32].into()),
 			0,
-			3000
+			3000,
+			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
 			RuntimeOrigin::signed([0; 32].into()),
@@ -1512,11 +1522,11 @@ fn different_proposals() {
 			crate::Vote::Yes
 		));
 		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_996_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_996_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 503_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 3000);
 		run_to_block(31);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_996_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_996_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 503_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 3000);
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
@@ -1538,7 +1548,7 @@ fn different_proposals() {
 			crate::Vote::Yes
 		));
 		run_to_block(61);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_996_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_996_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 503_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 3000);
 		assert_ok!(PropertyGovernance::propose(
@@ -1564,13 +1574,14 @@ fn different_proposals() {
 			crate::Vote::Yes
 		));
 		run_to_block(91);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_800);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 500_000);
 		assert_eq!(PropertyReserve::<Test>::get(0), 0);
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([0; 32].into()),
 			0,
-			2000
+			2000,
+			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
 			RuntimeOrigin::signed([0; 32].into()),
@@ -1595,7 +1606,7 @@ fn different_proposals() {
 			crate::Vote::No
 		));
 		run_to_block(121);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_400);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_300);
 		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 500_500);
 		assert_eq!(PropertyReserve::<Test>::get(0), 500);
 	});

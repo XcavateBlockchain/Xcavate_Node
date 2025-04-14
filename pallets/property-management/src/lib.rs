@@ -15,24 +15,26 @@ pub use weights::*;
 
 use frame_support::{
 	traits::{
-		tokens::fungible,
-		fungible::{Mutate, Inspect, MutateHold},
-		Currency, ExistenceRequirement::KeepAlive, OnUnbalanced, ReservableCurrency,
-		tokens::{Preservation, Fortitude, Precision, Restriction},
+		tokens::{fungible, fungibles},
+		fungible::MutateHold,	
+		fungibles::Mutate as FungiblesMutate,
+		tokens::Preservation,
 	},
 
 	PalletId,
 };
 
 use frame_support::sp_runtime::{
-	traits::{AccountIdConversion, CheckedAdd, CheckedDiv, CheckedMul, Zero, CheckedSub},
-	Saturating,
+	traits::{AccountIdConversion, Zero},
 };
 
 use codec::Codec;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
+
+pub type ForeignAssetIdOf<T> =
+	<<T as Config>::ForeignCurrency as fungibles::Inspect<<T as frame_system::Config>::AccountId>>::AssetId;
 
 pub type Balance = u128;
 
@@ -101,6 +103,12 @@ pub mod pallet {
 			+ fungible::InspectHold<AccountIdOf<Self>, Balance = Balance>
 			+ fungible::MutateHold<AccountIdOf<Self>, Balance = Balance, Reason = RuntimeHoldReasonOf<Self>>
 			+ fungible::BalancedHold<AccountIdOf<Self>, Balance = Balance>;
+
+		type ForeignCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
+			+ fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
+			+ fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
 
 		/// The property management's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
@@ -439,6 +447,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset_id: u32,
 			amount: Balance,
+			payment_asset: pallet_nft_marketplace::PaymentAssets,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let letting_agent = LettingStorage::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
@@ -447,15 +456,15 @@ pub mod pallet {
 			let scaled_amount = amount
 				.checked_mul(1)  // Modify the scale factor if needed
 				.ok_or(Error::<T>::MultiplyError)?;
-		
-			<T as pallet::Config>::NativeCurrency::transfer(
-				&signer,
-				&Self::account_id(),
-				scaled_amount.saturating_mul(
-					<T as Config>::PolkadotJsMultiplier::get(),
-				),
+
+			<T as pallet::Config>::ForeignCurrency::transfer(
+				payment_asset.id(), 
+				&signer, 
+				&Self::account_id(), 
+				scaled_amount, 
 				Preservation::Expendable,
-			).map_err(|_| Error::<T>::NotEnoughFunds)?;
+			)
+			.map_err(|_| Error::<T>::NotEnoughFunds)?;
 		
 			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
 			let mut governance_amount = Balance::zero();
@@ -480,14 +489,15 @@ pub mod pallet {
 			// Pay property debts first
 			let amount_to_pay_debts = core::cmp::min(amount, property_debts);
 			if amount_to_pay_debts > Balance::zero() {
-				<T as pallet::Config>::NativeCurrency::transfer(
-					&Self::account_id(),
-					&Self::account_id(),
-					amount_to_pay_debts.saturating_mul(
-						<T as Config>::PolkadotJsMultiplier::get(),
-					),
+				<T as pallet::Config>::ForeignCurrency::transfer(
+					payment_asset.id(), 
+					&Self::account_id(), 
+					&Self::account_id(), 
+					amount_to_pay_debts, 
 					Preservation::Expendable,
-				).map_err(|_| Error::<T>::NotEnoughFunds)?;
+				)
+				.map_err(|_| Error::<T>::NotEnoughFunds)?;
+
 				let new_debts = property_debts.checked_sub(amount_to_pay_debts)
 					.ok_or(Error::<T>::ArithmeticUnderflow)?;
 				PropertyDebts::<T>::insert(asset_id, new_debts);
@@ -503,16 +513,15 @@ pub mod pallet {
 				let missing_amount = required_reserve.saturating_sub(property_reserve);
 				let reserve_amount = core::cmp::min(remaining_amount, missing_amount);
 		
-				if reserve_amount > Balance::zero() {
-					<T as pallet::Config>::NativeCurrency::transfer(
-						&Self::account_id(),
-						&Self::governance_account_id(),
-						reserve_amount.saturating_mul(
-							<T as Config>::PolkadotJsMultiplier::get(),
-						),
+				if reserve_amount > Balance::zero() {		
+					<T as pallet::Config>::ForeignCurrency::transfer(
+						payment_asset.id(), 
+						&Self::account_id(), 
+						&Self::governance_account_id(), 
+						reserve_amount, 
 						Preservation::Expendable,
-					).map_err(|_| Error::<T>::NotEnoughFunds)?;
-		
+					)
+					.map_err(|_| Error::<T>::NotEnoughFunds)?;
 					let new_property_reserve = property_reserve
 						.checked_add(reserve_amount)
 						.ok_or(Error::<T>::ArithmeticOverflow)?;
@@ -559,21 +568,21 @@ pub mod pallet {
 		/// Emits `WithdrawFunds` event when succesfful.
 		#[pallet::call_index(5)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
-		pub fn withdraw_funds(origin: OriginFor<T>) -> DispatchResult {
+		pub fn withdraw_funds(origin: OriginFor<T>, payment_asset: pallet_nft_marketplace::PaymentAssets) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let amount = StoredFunds::<T>::take(signer.clone());
 			ensure!(
 				!amount.is_zero(),
 				Error::<T>::UserHasNoFundsStored
 			);
-			<T as pallet::Config>::NativeCurrency::transfer(
-				&Self::account_id(),
-				&signer,
-				amount.saturating_mul(
-					<T as Config>::PolkadotJsMultiplier::get(),
-				),
+			<T as pallet::Config>::ForeignCurrency::transfer(
+				payment_asset.id(), 
+				&Self::account_id(), 
+				&signer, 
+				amount, 
 				Preservation::Expendable,
-			).map_err(|_| Error::<T>::NotEnoughFunds)?;
+			)
+			.map_err(|_| Error::<T>::NotEnoughFunds)?;
 			Self::deposit_event(Event::<T>::WithdrawFunds { who: signer, amount });
 			Ok(())
 		}

@@ -98,7 +98,7 @@ impl pallet_balances::Config for Test {
 	type RuntimeFreezeReason = RuntimeFreezeReason;
 	type FreezeIdentifier = ();
 	// Holds are used with COLLATOR_LOCK_ID and DELEGATOR_LOCK_ID
-	type MaxHolds = ConstU32<2>;
+	type MaxHolds = ConstU32<3>;
 	type MaxFreezes = ConstU32<0>;
 }
 
@@ -249,6 +249,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PostcodeLimit = Postcode;
 	type MaxPaymentOptions = MaxPaymentOption;
+	type ListingDeposit = ConstU128<100>;
 }
 
 parameter_types! {
@@ -264,6 +265,7 @@ impl pallet_property_management::Config for Test {
 	type WeightInfo = pallet_property_management::weights::SubstrateWeight<Test>;
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type NativeCurrency = Balances;
+	type ForeignCurrency = ForeignAssets;
 	type PalletId = PropertyManagementPalletId;
 	type AgentOrigin = EnsureRoot<Self::AccountId>;
 	type LettingAgentDeposit = ConstU128<100>;
@@ -288,8 +290,8 @@ parameter_types! {
 impl pallet_property_governance::Config for Test {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = weights::SubstrateWeight<Test>;
-	type RuntimeHoldReason = RuntimeHoldReason;
 	type NativeCurrency = Balances;
+	type ForeignCurrency = ForeignAssets;
 	type VotingTime = PropertyVotingTime;
 	type MaxVotesForBlock = MaxVoteForBlock;
 	type MinSlashingAmount = ConstU128<100>;

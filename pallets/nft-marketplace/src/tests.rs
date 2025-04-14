@@ -117,7 +117,7 @@ fn list_object_works() {
 		assert_eq!(NextAssetId::<Test>::get(), 1);
 		assert_eq!(OngoingObjectListing::<Test>::get(0).is_some(), true);
 		assert_eq!(RegisteredNftDetails::<Test>::get(0, 0).is_some(), true);
-		assert_eq!(Uniques::owner(0, 0).unwrap(), NftMarketplace::account_id());
+		assert_eq!(Uniques::owner(0, 0).unwrap(), NftMarketplace::property_account_id(0));
 	})
 }
 
@@ -308,7 +308,7 @@ fn listing_and_selling_multiple_objects() {
 		assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(1, [1; 32].into()), 100);
 	});
 }
-
+ 
 // lawyer_claim_property function
 #[test]
 fn claim_property_works() {
@@ -625,7 +625,7 @@ fn distributes_nfts_and_funds_2() {
 	})
 } 
 
-
+ 
 #[test]
 fn reject_contract_and_refund() {
 	new_test_ext().execute_with(|| {
@@ -668,7 +668,7 @@ fn reject_contract_and_refund() {
 		assert_eq!(PropertyLawyer::<Test>::get(0).unwrap().real_estate_developer_status, crate::DocumentStatus::Rejected);
 		assert_eq!(pallet_nfts::Item::<Test>::get(0, 0).is_none(), false);
 
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::account_id()), 624000);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(0)), 624000);
 		assert_eq!(
 			TokenOwner::<Test>::get::<AccountId, ItemId<Test>>([1; 32].into(), 0)
 				.paid_funds
@@ -704,7 +704,7 @@ fn reject_contract_and_refund() {
 		assert_eq!(pallet_nfts::Item::<Test>::get(0, 0).is_none(), true);
 	})
 }
- 
+
 #[test]
 fn second_attempt_works() {
 	new_test_ext().execute_with(|| {
@@ -916,7 +916,7 @@ fn relist_nfts_not_created_with_marketplace_fails() {
 			Error::<Test>::NftNotFound
 		);
 	})
-}
+} 
 
 #[test]
 fn relist_a_nft_fails() {
@@ -1153,7 +1153,7 @@ fn make_offer_works() {
 		assert_eq!(TokenListings::<Test>::get(1).is_some(), true);
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_some(), true);
 		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_148_000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::account_id()), 2000);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(1)), 2000);
 	})
 }
 
@@ -1289,7 +1289,7 @@ fn handle_offer_works() {
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_none(), true);
 		assert_ok!(NftMarketplace::make_offer(RuntimeOrigin::signed([2; 32].into()), 1, 2000, 10, crate::PaymentAssets::USDT));
 		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_130_000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::account_id()), 20000);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(1)), 20000);
 		assert_ok!(NftMarketplace::handle_offer(
 			RuntimeOrigin::signed([1; 32].into()),
 			1,
@@ -1298,7 +1298,7 @@ fn handle_offer_works() {
 		));
 		assert_eq!(TokenListings::<Test>::get(1).unwrap().amount, 10);
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_none(), true);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::account_id()), 0);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(1)), 0);
 		assert_eq!(LocalAssets::balance(0, &([1; 32].into())), 80);
 		assert_eq!(LocalAssets::balance(0, &([2; 32].into())), 10);
 		assert_eq!(LocalAssets::balance(0, &NftMarketplace::account_id()), 10);
@@ -1440,12 +1440,12 @@ fn cancel_offer_works() {
 		assert_eq!(TokenListings::<Test>::get(1).is_some(), true);
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_some(), true);
 		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_148_000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::account_id()), 2000);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(1)), 2000);
 		assert_ok!(NftMarketplace::cancel_offer(RuntimeOrigin::signed([2; 32].into()), 1));
 		assert_eq!(TokenListings::<Test>::get(1).is_some(), true);
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_some(), false);
 		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_150_000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::account_id()), 0);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(1)), 0);
 	})
 }
 
@@ -1505,7 +1505,7 @@ fn cancel_offer_fails() {
 		assert_eq!(TokenListings::<Test>::get(1).is_some(), true);
 		assert_eq!(OngoingOffers::<Test>::get::<u32, AccountId>(1, [2; 32].into()).is_some(), true);
 		assert_eq!(ForeignAssets::balance(1984, &([2; 32].into())), 1_148_000);
-		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::account_id()), 2000);
+		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(1)), 2000);
 		assert_noop!(
 			NftMarketplace::cancel_offer(RuntimeOrigin::signed([1; 32].into()), 1),
 			Error::<Test>::InvalidIndex
@@ -1723,7 +1723,7 @@ fn upgrade_single_nft_from_listed_object_fails() {
 		);
 	})
 }
-
+ 
 #[test]
 fn upgrade_object_for_relisted_nft_fails() {
 	new_test_ext().execute_with(|| {
@@ -2021,4 +2021,4 @@ fn listing_objects_in_different_regions() {
 		assert_eq!(LocalAssets::balance(1, &[2; 32].into()), 100);
 		assert_eq!(LocalAssets::balance(2, &[2; 32].into()), 100);
 	})
-}  
+}    

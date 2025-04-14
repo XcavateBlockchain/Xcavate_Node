@@ -249,6 +249,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PostcodeLimit = Postcode;
 	type MaxPaymentOptions = MaxPaymentOption;
+	type ListingDeposit = ConstU128<100>;
 }
 
 parameter_types! {
@@ -265,6 +266,7 @@ impl pallet_property_management::Config for Test {
 	type WeightInfo = weights::SubstrateWeight<Test>;
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type NativeCurrency = Balances;
+	type ForeignCurrency = ForeignAssets;
 	type PalletId = PropertyManagementPalletId;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = AssetHelper;
@@ -304,7 +306,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(1984, [1; 32].into(), 1_500_000),
 			(1984, [2; 32].into(), 1_150_000),
 			(1984, [3; 32].into(), 1_150_000),
-			(1984, [4; 32].into(), 50),
+			(1984, [4; 32].into(), 5_000),
 			(1984, [5; 32].into(), 500),
 		], // Genesis accounts: id, account_id, balance
 	}

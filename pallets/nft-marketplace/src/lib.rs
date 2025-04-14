@@ -17,6 +17,7 @@ pub use weights::*;
 use frame_support::{
 	traits::{
 		tokens::{fungible, fungibles},
+		fungible::Mutate,	
 		fungibles::Mutate as FungiblesMutate,
 		fungibles::Inspect as FungiblesInspect,
 		Currency, Incrementable,
@@ -246,8 +247,8 @@ pub mod pallet {
 
 		type NativeCurrency: fungible::Inspect<AccountIdOf<Self>>
 			+ fungible::Mutate<AccountIdOf<Self>>
-			+ fungible::hold::Inspect<AccountIdOf<Self>>
-			+ fungible::hold::Mutate<AccountIdOf<Self>>;
+			+ fungible::InspectHold<AccountIdOf<Self>, Balance = Balance>
+			+ fungible::BalancedHold<AccountIdOf<Self>, Balance = Balance>;
 
 		type LocalCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
 			+ fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
@@ -337,6 +338,9 @@ pub mod pallet {
 		/// The maximum amount of token of a nft.
 		#[pallet::constant]
 		type MaxPaymentOptions: Get<u32>;
+
+		/// A deposit for listing a property.
+		type ListingDeposit: Get<Balance>;
 	}
 
 	pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
@@ -556,6 +560,7 @@ pub mod pallet {
 		InvalidIndex,
 		/// The buyer doesn't have enough funds.
 		NotEnoughFunds,
+		NotEnoughFunds1,
 		/// Not enough token available to buy.
 		NotEnoughTokenAvailable,
 		/// Error by converting a type.
@@ -742,12 +747,20 @@ pub mod pallet {
 				collection_id,
 				token_amount,
 			};
+			let property_account = Self::property_account_id(listing_id);
+			T::NativeCurrency::transfer(
+				&signer,
+				&property_account,
+				T::ListingDeposit::get(),
+				Preservation::Expendable
+			)
+			.map_err(|_| Error::<T>::NotEnoughFunds)?;
 			let pallet_account = Self::account_id();
 			pallet_nfts::Pallet::<T>::do_mint(
 				collection_id.into(),
 				item_id.into(),
 				Some(pallet_account.clone()),
-				pallet_account.clone(),
+				property_account.clone(),
 				Self::default_item_config(),
 				|_, _| Ok(()),
 			)?;
@@ -768,18 +781,19 @@ pub mod pallet {
 			OngoingObjectListing::<T>::insert(listing_id, nft);
 			ListedToken::<T>::insert(listing_id, token_amount);
 
-			let user_lookup = <T::Lookup as StaticLookup>::unlookup(pallet_account);
+			let property_origin: OriginFor<T> = RawOrigin::Signed(property_account.clone()).into();
+			let user_lookup = <T::Lookup as StaticLookup>::unlookup(property_account.clone());
 			let nft_balance: FrationalizedNftBalanceOf<T> = token_amount.into();
 			let fractionalize_collection_id = FractionalizeCollectionId::<T>::from(collection_id);
 			let fractionalize_item_id = FractionalizeItemId::<T>::from(item_id);
-			pallet_nft_fractionalization::Pallet::<T>::fractionalize(
-				pallet_origin.clone(),
+  			pallet_nft_fractionalization::Pallet::<T>::fractionalize(
+				property_origin.clone(),
 				fractionalize_collection_id.into(),
 				fractionalize_item_id.into(),
 				asset_id.into(),
 				user_lookup,
 				nft_balance,
-			)?;
+			)?;  
 			let property_price = token_price
 				.checked_mul(token_amount as u128)
 				.ok_or(Error::<T>::MultiplyError)?;
@@ -855,7 +869,7 @@ pub mod pallet {
 					.checked_add(tax)
 					.ok_or(Error::<T>::ArithmeticOverflow)?;
 
-				Self::transfer_funds(signer.clone(), Self::account_id(), total_transfer_price, payment_asset.id())?;
+				Self::transfer_funds(signer.clone(), Self::property_account_id(listing_id), total_transfer_price, payment_asset.id())?;
 				*listed_token =
 					listed_token.checked_sub(amount).ok_or(Error::<T>::ArithmeticUnderflow)?;
 				if !TokenBuyer::<T>::get(listing_id).contains(&signer) {
@@ -984,6 +998,7 @@ pub mod pallet {
 				Error::<T>::LocationUnknown
 			);
 			let token_amount: Balance = amount.try_into().map_err(|_| Error::<T>::ConversionError)?;
+			let mut listing_id = NextListingId::<T>::get();
 			T::LocalCurrency::transfer(
 				nft_details.asset_id,
 				&signer,
@@ -992,7 +1007,6 @@ pub mod pallet {
 				Preservation::Expendable,
 			)
 			.map_err(|_| Error::<T>::NotEnoughFunds)?;
-			let mut listing_id = NextListingId::<T>::get();
 			let token_listing = TokenListingDetails {
 				seller: signer.clone(),
 				token_price,
@@ -1085,7 +1099,7 @@ pub mod pallet {
 			let price = offer_price
 				.checked_mul(amount as u128)
 				.ok_or(Error::<T>::MultiplyError)?;
-			Self::transfer_funds(signer.clone(), Self::account_id(), price, payment_asset.id())?;
+			Self::transfer_funds(signer.clone(), Self::property_account_id(listing_id), price, payment_asset.id())?;
 			let offer_details = OfferDetails { buyer: signer.clone(), token_price: offer_price, amount, payment_assets: payment_asset };
 			OngoingOffers::<T>::insert(listing_id, signer, offer_details);
 			Self::deposit_event(Event::<T>::OfferCreated { listing_id, price: offer_price });
@@ -1120,7 +1134,7 @@ pub mod pallet {
 				OngoingOffers::<T>::take(listing_id, offeror).ok_or(Error::<T>::InvalidIndex)?;
 			ensure!(listing_details.amount >= offer_details.amount, Error::<T>::NotEnoughTokenAvailable);
 			let price = offer_details.get_total_amount()?;
-			let pallet_account = Self::account_id();
+			let pallet_account = Self::property_account_id(listing_id);
 			match offer {
 				Offer::Accept => {
 					Self::buying_token_process(
@@ -1159,7 +1173,7 @@ pub mod pallet {
 				OngoingOffers::<T>::take(listing_id, signer.clone()).ok_or(Error::<T>::InvalidIndex)?;
 			ensure!(offer_details.buyer == signer.clone(), Error::<T>::NoPermission);
 			let price = offer_details.get_total_amount()?;
-			Self::transfer_funds(Self::account_id(), offer_details.buyer, price, offer_details.payment_assets.id())?;
+			Self::transfer_funds(Self::property_account_id(listing_id), offer_details.buyer, price, offer_details.payment_assets.id())?;
 			Self::deposit_event(Event::<T>::OfferCancelled { listing_id, account_id: signer.clone() });
 			Ok(())
 		}
@@ -1518,8 +1532,12 @@ pub mod pallet {
 
 	impl<T: Config> Pallet<T> {
 		/// Get the account id of the pallet
- 		pub fn account_id() -> AccountIdOf<T> {
+		pub fn account_id() -> AccountIdOf<T> {
 			<T as pallet::Config>::PalletId::get().into_account_truncating()
+		}
+
+ 		pub fn property_account_id(nft_id: ListingId) -> AccountIdOf<T> {
+			<T as pallet::Config>::PalletId::get().into_sub_account_truncating(("pr", nft_id))
 		}
 
 		/// Get the account id of the treasury pallet
@@ -1540,7 +1558,7 @@ pub mod pallet {
 		/// of a collection are sold.
 		fn execute_deal(listing_id: u32, property_lawyer_details: PropertyLawyerDetails<T>, payment_asset: PaymentAssets) -> DispatchResult {
 			let list = <TokenBuyer<T>>::take(listing_id);
-			let pallet_account = Self::account_id();
+			let pallet_account = Self::property_account_id(listing_id);
 			let nft_details =
 				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			let price = nft_details
@@ -1604,7 +1622,7 @@ pub mod pallet {
 					token_amount,
 					Preservation::Expendable,
 				)
-				.map_err(|_| Error::<T>::NotEnoughFunds)?;
+				.map_err(|_| Error::<T>::NotEnoughFunds1)?;
 				PropertyOwner::<T>::try_mutate(nft_details.asset_id, |keys| {
 					keys.try_push(owner.clone()).map_err(|_| Error::<T>::TooManyTokenBuyer)?;
 					Ok::<(), DispatchError>(())
@@ -1626,7 +1644,7 @@ pub mod pallet {
 		fn burn_tokens_and_nfts(listing_id: ListingId) -> DispatchResult {
 			let nft_details =
 				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
-			let pallet_account = Self::account_id();
+			let pallet_account = Self::property_account_id(listing_id);
 			let pallet_origin: OriginFor<T> = RawOrigin::Signed(pallet_account.clone()).into();
 			let user_lookup = <T::Lookup as StaticLookup>::unlookup(pallet_account);
 			let fractionalize_collection_id = FractionalizeCollectionId::<T>::from(nft_details.collection_id);
@@ -1656,7 +1674,7 @@ pub mod pallet {
 
 		fn refund_investors(listing_id: ListingId, property_lawyer_details: PropertyLawyerDetails<T>) -> DispatchResult {
 			let list = <TokenBuyer<T>>::take(listing_id);
-			let pallet_account = Self::account_id();
+			let pallet_account = Self::property_account_id(listing_id);
 			let nft_details =
 				OngoingObjectListing::<T>::get(listing_id).ok_or(Error::<T>::InvalidIndex)?;
 			let payment_asset_usdt = PaymentAssets::USDT;

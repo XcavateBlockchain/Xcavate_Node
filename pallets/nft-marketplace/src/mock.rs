@@ -249,6 +249,7 @@ impl pallet_nft_marketplace::Config for Test {
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PostcodeLimit = Postcode;
 	type MaxPaymentOptions = MaxPaymentOption;
+	type ListingDeposit = ConstU128<100>;
 }
 
 // Build genesis storage according to the mock runtime.

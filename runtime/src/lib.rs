@@ -398,7 +398,7 @@ impl pallet_balances::Config for Runtime {
 	type RuntimeFreezeReason = RuntimeFreezeReason;
 	type FreezeIdentifier = RuntimeFreezeReason;
 	type MaxFreezes = ConstU32<1>;
-	type MaxHolds = ConstU32<3>;
+	type MaxHolds = ConstU32<4>;
 }
 
 parameter_types! {
@@ -435,6 +435,7 @@ parameter_types! {
 	pub const MaxNftTokens: u32 = 250;
 	pub const Postcode: u32 = 10;
 	pub const MaxPaymentOption: u32 = 2;
+	pub const ListingDepositAmount: Balance = 100 * DOLLARS;
 }
 
 /// Configure the pallet-nft-marketplace in pallets/nft-marketplace.
@@ -458,6 +459,7 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type PostcodeLimit = Postcode;
 	type MaxPaymentOptions = MaxPaymentOption;
+	type ListingDeposit = ListingDepositAmount;
 }
 
 parameter_types! {
@@ -491,6 +493,7 @@ impl pallet_property_management::Config for Runtime {
 	type WeightInfo = pallet_property_management::weights::SubstrateWeight<Runtime>;
 	type RuntimeHoldReason = RuntimeHoldReason;
 	type NativeCurrency = Balances;
+	type ForeignCurrency = ForeignAssets;
 	type PalletId = PropertyManagementPalletId;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = pallet_property_management::AssetHelper;
@@ -520,8 +523,8 @@ parameter_types! {
 impl pallet_property_governance::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = pallet_property_governance::weights::SubstrateWeight<Runtime>;
-	type RuntimeHoldReason = RuntimeHoldReason;
 	type NativeCurrency = Balances;
+	type ForeignCurrency = ForeignAssets;
 	type VotingTime = PropertyVotingTime;
 	type MaxVotesForBlock = MaxVoteForBlock;
 	type MinSlashingAmount = MinimumSlashingAmount;

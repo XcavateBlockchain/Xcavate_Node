@@ -16,8 +16,9 @@ pub use weights::*;
 use frame_support::{
 	sp_runtime::{traits::AccountIdConversion, Saturating, Percent},
 	traits::{
-		tokens::fungible,
-		fungible::{Mutate, MutateHold},
+		tokens::{fungible, fungibles},
+		fungible::MutateHold,
+		fungibles::Mutate as FungiblesMutate,
 		tokens::{Preservation, Fortitude, Precision, Restriction},
 	},
 	PalletId,
@@ -26,7 +27,7 @@ use frame_support::{
 use codec::Codec;
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
-pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
+pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
 
 pub type Balance = u128;
 
@@ -38,14 +39,6 @@ pub mod pallet {
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
-
-	/// A reason for the pallet placing a hold on funds.
-	#[pallet::composite_enum]
-	pub enum HoldReason {
-		/// Funds are held to register for free transactions.
-		#[codec(index = 0)]
-		LettingAgent,
-	}
 
 	#[cfg(feature = "runtime-benchmarks")]
 	pub struct AssetHelper;
@@ -73,6 +66,7 @@ pub mod pallet {
 		pub proposer: AccountIdOf<T>,
 		pub asset_id: u32,
 		pub amount: Balance,
+		pub payment_asset: pallet_nft_marketplace::PaymentAssets,
 		pub created_at: BlockNumberFor<T>,
 		pub proposal_info: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
 	}
@@ -137,15 +131,18 @@ pub mod pallet {
 		/// Type representing the weight of this pallet.
 		type WeightInfo: WeightInfo;
 
-		/// The overarching hold reason.
-		type RuntimeHoldReason: From<HoldReason>;
-
 		/// The reservable currency type.
 		type NativeCurrency: fungible::Inspect<AccountIdOf<Self>>
 			+ fungible::Mutate<AccountIdOf<Self>>
 			+ fungible::InspectHold<AccountIdOf<Self>, Balance = Balance>
 			+ fungible::MutateHold<AccountIdOf<Self>, Balance = Balance, Reason = RuntimeHoldReasonOf<Self>>
 			+ fungible::BalancedHold<AccountIdOf<Self>, Balance = Balance>;
+
+		type ForeignCurrency: fungibles::InspectEnumerable<AccountIdOf<Self>, Balance = Balance, AssetId = u32>
+			+ fungibles::metadata::Inspect<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
+			+ fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
+			+ fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
 
 		/// The amount of time given to vote for a proposal.
 		type VotingTime: Get<BlockNumberFor<Self>>;
@@ -385,6 +382,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset_id: u32,
 			amount: Balance,
+			payment_asset: pallet_nft_marketplace::PaymentAssets,
 			data: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -399,6 +397,7 @@ pub mod pallet {
 				proposer: signer.clone(),
 				asset_id,
 				amount,
+				payment_asset,
 				created_at: current_block_number,
 				proposal_info: data,
 			};
@@ -577,7 +576,7 @@ pub mod pallet {
 				pallet_property_management::LettingStorage::<T>::get(challenge.asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
 			let amount = <T as Config>::MinSlashingAmount::get();
 			let _slashed_amount = <T as pallet::Config>::NativeCurrency::transfer_on_hold(
-				&HoldReason::LettingAgent.into(),
+				&<T as pallet_property_management::Config>::RuntimeHoldReason::from(pallet_property_management::HoldReason::LettingAgent),
 				&letting_agent, 
 				&Self::account_id(),
 				amount,
@@ -722,13 +721,12 @@ pub mod pallet {
 			// Check if the property reserves cover the proposal amount
 			if property_reserves >= proposal_amount {
 				// Transfer the full proposal amount from the reserves
-				<T as pallet::Config>::NativeCurrency::transfer(
-					&Self::account_id(),
-					&letting_agent,
-					proposal_amount.saturating_mul(
-						<T as Config>::PolkadotJsMultiplier::get(),
-					),
-					Preservation::Expendable
+				<T as pallet::Config>::ForeignCurrency::transfer(
+					proposal.payment_asset.id(), 
+					&Self::account_id(), 
+					&letting_agent, 
+					proposal_amount, 
+					Preservation::Expendable,
 				)
 				.map_err(|_| Error::<T>::NotEnoughFunds)?;
 		
@@ -742,13 +740,12 @@ pub mod pallet {
 				)?;
 			} else {
 				// Transfer only the available property reserves
-				<T as pallet::Config>::NativeCurrency::transfer(
-					&Self::account_id(),
-					&letting_agent,
-					proposal_amount.saturating_mul(
-						<T as Config>::PolkadotJsMultiplier::get(),
-					),
-					Preservation::Expendable
+				<T as pallet::Config>::ForeignCurrency::transfer(
+					proposal.payment_asset.id(), 
+					&Self::account_id(), 
+					&letting_agent, 
+					property_reserves, 
+					Preservation::Expendable,
 				)
 				.map_err(|_| Error::<T>::NotEnoughFunds)?;
 		
