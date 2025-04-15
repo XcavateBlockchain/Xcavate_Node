@@ -16,10 +16,13 @@ pub use weights::*;
 
 use frame_support::{
 	traits::{
-		tokens::{fungible, fungibles},
+		tokens::{fungible, fungibles, nonfungibles_v2},
 		fungible::Mutate,	
 		fungibles::Mutate as FungiblesMutate,
 		fungibles::Inspect as FungiblesInspect,
+		nonfungibles_v2::Mutate as NonfungiblesMutate,
+		nonfungibles_v2::Inspect as NonfungiblesInspect,
+		nonfungibles_v2::{Create, Transfer},
 		Currency, Incrementable,
 		tokens::Preservation,
 	},
@@ -261,6 +264,13 @@ pub mod pallet {
 			+ fungibles::metadata::Mutate<AccountIdOf<Self>, AssetId = u32>
 			+ fungibles::Mutate<AccountIdOf<Self>, Balance = Balance>
 			+ fungibles::Inspect<AccountIdOf<Self>, Balance = Balance>;
+		
+		type Nfts: nonfungibles_v2::Inspect<AccountIdOf<Self>, ItemId = <Self as pallet::Config>::NftId,
+			CollectionId = <Self as pallet::Config>::NftCollectionId>	
+			+ Transfer<Self::AccountId>
+			+ nonfungibles_v2::Mutate<AccountIdOf<Self>, ItemConfig>
+			+ nonfungibles_v2::Create<AccountIdOf<Self>, CollectionConfig<CurrencyBalanceOf<Self>, 
+			BlockNumberFor<Self>, <Self as pallet_nfts::Config>::CollectionId>>;
 
 		/// The marketplace's pallet id, used for deriving its sovereign account ID.
 		#[pallet::constant]
@@ -278,6 +288,12 @@ pub mod pallet {
 
 		/// Origin who can unlock new locations.
 		type LocationOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
+		/// Identifier for the collection of NFT.
+		type NftCollectionId: Member + Parameter + MaxEncodedLen + Copy;
+
+		/// The type used to identify an NFT within a collection.
+		type NftId: Member + Parameter + MaxEncodedLen + Copy;
 
 		/// Collection id type from pallet nfts.
 		type CollectionId: IsType<<Self as pallet_nfts::Config>::CollectionId>
@@ -397,7 +413,7 @@ pub mod pallet {
 	/// Mapping of a collection id to the region.
 	#[pallet::storage]
 	pub type RegionCollections<T: Config> =
-		StorageMap<_, Blake2_128Concat, RegionId, <T as pallet::Config>::CollectionId, OptionQuery>;
+		StorageMap<_, Blake2_128Concat, RegionId, <T as pallet::Config>::NftCollectionId, OptionQuery>;
 
 	/// Mapping from the Nft to the Nft details.
 	#[pallet::storage]
@@ -534,7 +550,7 @@ pub mod pallet {
 		/// The price of the listed object has been updated.
 		ObjectUpdated { listing_index: ListingId, new_price: Balance },
 		/// New region has been created.
-		RegionCreated { region_id: u32, collection_id: CollectionId<T> },
+		RegionCreated { region_id: u32, collection_id: <T as pallet::Config>::NftCollectionId },
 		/// New location has been created.
 		LocationCreated { region_id: u32, location_id: LocationId<T> },
 		/// A new offer has been made.
@@ -623,30 +639,13 @@ pub mod pallet {
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::create_new_region())]
 		pub fn create_new_region(origin: OriginFor<T>) -> DispatchResult {
 			T::LocationOrigin::ensure_origin(origin)?;
-			let collection_id = pallet_nfts::NextCollectionId::<T>::mutate(|maybe_id| {
-				let current_collection_id = maybe_id.unwrap_or_else(|| {
-					let initial_value = <T as pallet_nfts::Config>::CollectionId::initial_value();
-					*maybe_id = initial_value;
-					initial_value.expect("Failed to get the initial value")
-				});
-				let next_collection_id = current_collection_id.increment();
-				*maybe_id = next_collection_id;
-				current_collection_id
-			});
-			let collection_id: CollectionId<T> = collection_id.into();
+			//let collection_id: CollectionId<T> = collection_id.into();
 			let pallet_id: AccountIdOf<T> =
 				Self::account_id();
-			pallet_nfts::Pallet::<T>::do_create_collection(
-				collection_id.into(),
-				pallet_id.clone(),
-				pallet_id.clone(),
-				Self::default_collection_config(),
-				T::CollectionDeposit::get(),
-				pallet_nfts::Event::Created {
-					creator: pallet_id.clone(),
-					owner: pallet_id,
-					collection: collection_id.into(),
-				},
+			let collection_id = <T as pallet::Config>::Nfts::create_collection(
+				&pallet_id, 
+				&pallet_id, 
+				&Self::default_collection_config(),
 			)?;
 			let mut region_id = NextRegionId::<T>::get();
 			RegionCollections::<T>::insert(region_id, collection_id);

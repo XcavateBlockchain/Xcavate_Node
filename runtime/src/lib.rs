@@ -444,10 +444,13 @@ impl pallet_nft_marketplace::Config for Runtime {
 	type WeightInfo = pallet_nft_marketplace::weights::SubstrateWeight<Runtime>;
 	type NativeCurrency = Balances;
 	type LocalCurrency = Assets;
+	type Nfts = Nfts;
 	type ForeignCurrency = ForeignAssets;
 	type PalletId = NftMarketplacePalletId;
 	type MaxNftToken = MaxNftTokens;
 	type LocationOrigin = EnsureRoot<Self::AccountId>;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = pallet_nft_marketplace::NftHelper;
 	type CollectionId = u32;
