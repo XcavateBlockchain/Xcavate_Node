@@ -30,6 +30,8 @@ use frame_support::sp_runtime::{
 
 use codec::Codec;
 
+use pallet_nft_marketplace::PaymentAssets;
+
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as Config>::RuntimeHoldReason;
 
@@ -80,6 +82,25 @@ pub mod pallet {
 		pub locations: BoundedVec<LocationId<T>, T::MaxLocations>,
 		pub assigned_properties: BoundedVec<u32, T::MaxProperties>,
 		pub deposited: bool,
+	}
+
+	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo, PartialOrd)]
+	#[scale_info(skip_type_params(T))]
+	pub struct PropertyReserveDetails {
+		pub usdt: Balance,
+		pub usdc: Balance,
+		pub total: Balance,
+	}
+
+	impl Default for PropertyReserveDetails {
+		fn default() -> Self {
+			Self {
+				usdt: 0,
+				usdc: 0,
+				total: 0,
+			}
+		}
 	}
 
 	#[pallet::config]
@@ -157,13 +178,18 @@ pub mod pallet {
 
 	/// Mapping from account to currently stored balance.
 	#[pallet::storage]
-	pub type StoredFunds<T> =
-		StorageMap<_, Blake2_128Concat, AccountIdOf<T>, Balance, ValueQuery>;
+	pub type InvestorFunds<T> = StorageDoubleMap<
+		_,
+		Blake2_128Concat, AccountIdOf<T>,
+		Blake2_128Concat, PaymentAssets,
+		Balance,
+		ValueQuery
+	>;
 
 	/// Mapping of asset id to the stored balance for a property.
 	#[pallet::storage]
 	pub type PropertyReserve<T> =
-		StorageMap<_, Blake2_128Concat, u32, Balance, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, u32, PropertyReserveDetails, ValueQuery>;
 
 	/// Mapping of asset id to the stored debts of a property.
 	#[pallet::storage]
@@ -447,7 +473,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset_id: u32,
 			amount: Balance,
-			payment_asset: pallet_nft_marketplace::PaymentAssets,
+			payment_asset: PaymentAssets,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
 			let letting_agent = LettingStorage::<T>::get(asset_id).ok_or(Error::<T>::NoLettingAgentFound)?;
@@ -468,7 +494,7 @@ pub mod pallet {
 		
 			let owner_list = pallet_nft_marketplace::PropertyOwner::<T>::get(asset_id);
 			let mut governance_amount = Balance::zero();
-			let property_reserve = PropertyReserve::<T>::get(asset_id);
+			let mut property_reserve = PropertyReserve::<T>::get(asset_id);
 			let property_info = pallet_nft_marketplace::AssetIdDetails::<T>::get(asset_id)
 				.ok_or(Error::<T>::NoObjectFound)?;
 			let property_price = property_info.price;
@@ -492,7 +518,7 @@ pub mod pallet {
 				<T as pallet::Config>::ForeignCurrency::transfer(
 					payment_asset.id(), 
 					&Self::account_id(), 
-					&Self::account_id(), 
+					&letting_agent, 
 					amount_to_pay_debts, 
 					Preservation::Expendable,
 				)
@@ -509,8 +535,8 @@ pub mod pallet {
 			let remaining_amount = amount.saturating_sub(governance_amount);
 		
 			// Fill property reserves with remaining amount
-			if property_reserve < required_reserve {
-				let missing_amount = required_reserve.saturating_sub(property_reserve);
+			if property_reserve.total < required_reserve {
+				let missing_amount = required_reserve.saturating_sub(property_reserve.total);
 				let reserve_amount = core::cmp::min(remaining_amount, missing_amount);
 		
 				if reserve_amount > Balance::zero() {		
@@ -522,10 +548,21 @@ pub mod pallet {
 						Preservation::Expendable,
 					)
 					.map_err(|_| Error::<T>::NotEnoughFunds)?;
-					let new_property_reserve = property_reserve
+					property_reserve.total = property_reserve.total
 						.checked_add(reserve_amount)
 						.ok_or(Error::<T>::ArithmeticOverflow)?;
-					PropertyReserve::<T>::insert(asset_id, new_property_reserve);
+
+					if payment_asset.id() == 1984 {
+						property_reserve.usdt = property_reserve.usdt
+							.checked_add(reserve_amount)
+							.ok_or(Error::<T>::ArithmeticOverflow)?;
+					} else {
+						property_reserve.usdc = property_reserve.usdc
+							.checked_add(reserve_amount)
+							.ok_or(Error::<T>::ArithmeticOverflow)?;
+					}
+					
+					PropertyReserve::<T>::insert(asset_id, property_reserve);
 				}
 		
 				governance_amount = governance_amount
@@ -546,10 +583,8 @@ pub mod pallet {
 					.ok_or(Error::<T>::MultiplyError)?
 					.checked_div(Self::u64_to_balance_option(total_token.into())?)
 					.ok_or(Error::<T>::DivisionError)?;
-				StoredFunds::<T>::try_mutate(owner.clone(), |old_funds| {
-					*old_funds = old_funds
-					.checked_add(amount_for_owner)
-					.ok_or(Error::<T>::ArithmeticOverflow)?;
+				InvestorFunds::<T>::try_mutate(owner.clone(), payment_asset.clone(), |stored| {
+					*stored = stored.checked_add(amount_for_owner).ok_or(Error::<T>::ArithmeticOverflow)?;
 					Ok::<(), DispatchError>(())
 				})?;
 			}
@@ -568,9 +603,9 @@ pub mod pallet {
 		/// Emits `WithdrawFunds` event when succesfful.
 		#[pallet::call_index(5)]
 		#[pallet::weight(<T as pallet::Config>::WeightInfo::withdraw_funds())]
-		pub fn withdraw_funds(origin: OriginFor<T>, payment_asset: pallet_nft_marketplace::PaymentAssets) -> DispatchResult {
+		pub fn withdraw_funds(origin: OriginFor<T>, payment_asset: PaymentAssets) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
-			let amount = StoredFunds::<T>::take(signer.clone());
+			let amount = InvestorFunds::<T>::take(signer.clone(), payment_asset.clone());
 			ensure!(
 				!amount.is_zero(),
 				Error::<T>::UserHasNoFundsStored
@@ -613,10 +648,16 @@ pub mod pallet {
 		}
 
 		/// Decreases the reserve of a property.
-		pub fn decrease_reserves(asset_id: u32, amount: Balance) -> DispatchResult {
+		pub fn decrease_reserves(asset_id: u32, amount: Balance, payment_asset: PaymentAssets) -> DispatchResult {
 			PropertyReserve::<T>::try_mutate(asset_id, |property_reserve| -> Result<(), DispatchError> {
-				ensure!(*property_reserve >= amount, Error::<T>::NotEnoughReserves);
-				*property_reserve = property_reserve.saturating_sub(amount);				
+				ensure!(property_reserve.usdt >= amount, Error::<T>::NotEnoughReserves);
+				property_reserve.total = property_reserve.total.saturating_sub(amount);
+				if payment_asset.id() == 1984 {
+					property_reserve.usdt = property_reserve.usdt.saturating_sub(amount);	
+				} else {
+					property_reserve.usdc = property_reserve.usdc.saturating_sub(amount);	
+				};
+							
 				Ok(())
 			})
 		}

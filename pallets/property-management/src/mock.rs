@@ -313,5 +313,15 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 	.assimilate_storage(&mut test)
 	.unwrap(); 
 
+	pallet_assets::GenesisConfig::<Test, Instance2> {
+		assets: vec![(1337, /* account("buyer", SEED, SEED) */ [0; 32].into(), true, 1)], // Genesis assets: id, owner, is_sufficient, min_balance
+		metadata: vec![(1337, "USDT".into(), "USDT".into(), 0)], // Genesis metadata: id, name, symbol, decimals
+		accounts: vec![
+			(1337, [4; 32].into(), 5_000),
+		], // Genesis accounts: id, account_id, balance
+	}
+	.assimilate_storage(&mut test)
+	.unwrap(); 
+
 	test.into()
 }

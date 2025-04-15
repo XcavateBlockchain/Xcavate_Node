@@ -14,7 +14,7 @@ pub mod weights;
 pub use weights::*;
 
 use frame_support::{
-	sp_runtime::{traits::AccountIdConversion, Saturating, Percent},
+	sp_runtime::{traits::{AccountIdConversion, Zero}, Saturating, Percent},
 	traits::{
 		tokens::{fungible, fungibles},
 		fungible::MutateHold,
@@ -25,6 +25,8 @@ use frame_support::{
 };
 
 use codec::Codec;
+
+use pallet_nft_marketplace::PaymentAssets;
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub type RuntimeHoldReasonOf<T> = <T as pallet_property_management::Config>::RuntimeHoldReason;
@@ -66,7 +68,6 @@ pub mod pallet {
 		pub proposer: AccountIdOf<T>,
 		pub asset_id: u32,
 		pub amount: Balance,
-		pub payment_asset: pallet_nft_marketplace::PaymentAssets,
 		pub created_at: BlockNumberFor<T>,
 		pub proposal_info: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
 	}
@@ -382,7 +383,6 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			asset_id: u32,
 			amount: Balance,
-			payment_asset: pallet_nft_marketplace::PaymentAssets,
 			data: BoundedVec<u8, <T as pallet_nfts::Config>::StringLimit>,
 		) -> DispatchResult {
 			let signer = ensure_signed(origin)?;
@@ -397,7 +397,6 @@ pub mod pallet {
 				proposer: signer.clone(),
 				asset_id,
 				amount,
-				payment_asset,
 				created_at: current_block_number,
 				proposal_info: data,
 			};
@@ -707,74 +706,68 @@ pub mod pallet {
 
 		/// Executes a proposal once it passes.
 		fn execute_proposal(proposal: Proposal<T>) -> DispatchResult {
-			let letting_agent =
-				pallet_property_management::LettingStorage::<T>::get(proposal.asset_id)
-					.ok_or(Error::<T>::NoLettingAgentFound)?;
-		
-			let property_reserves_balances = pallet_property_management::PropertyReserve::<T>::get(proposal.asset_id);
-			let property_reserves: Balance = TryInto::<u64>::try_into(property_reserves_balances)
-				.map_err(|_| Error::<T>::ConversionError)?
-				.try_into()
-				.map_err(|_| Error::<T>::ConversionError)?;
+			let asset_id = proposal.asset_id;
 			let proposal_amount = proposal.amount;
 		
-			// Check if the property reserves cover the proposal amount
-			if property_reserves >= proposal_amount {
-				// Transfer the full proposal amount from the reserves
-				<T as pallet::Config>::ForeignCurrency::transfer(
-					proposal.payment_asset.id(), 
-					&Self::account_id(), 
-					&letting_agent, 
-					proposal_amount, 
-					Preservation::Expendable,
-				)
-				.map_err(|_| Error::<T>::NotEnoughFunds)?;
+			let letting_agent = pallet_property_management::LettingStorage::<T>::get(asset_id)
+				.ok_or(Error::<T>::NoLettingAgentFound)?;
 		
-				// Decrease the reserves by the proposal amount
+			let reserves = pallet_property_management::PropertyReserve::<T>::get(asset_id);
+			let total_available = reserves.usdt.saturating_add(reserves.usdc);
+		
+			// Helper closure to transfer and decrease reserves
+			let transfer_reserve = |amount: Balance, currency: PaymentAssets| -> DispatchResult {
+				if amount.is_zero() {
+					return Ok(())
+				}
+				<T as pallet::Config>::ForeignCurrency::transfer(
+					currency.id(),
+					&Self::account_id(),
+					&letting_agent,
+					amount,
+					Preservation::Expendable,
+				).map_err(|_| Error::<T>::NotEnoughFunds)?;
+		
 				pallet_property_management::Pallet::<T>::decrease_reserves(
-					proposal.asset_id,
-					TryInto::<u64>::try_into(proposal_amount)
-					.map_err(|_| Error::<T>::ConversionError)?
-					.try_into()
-					.map_err(|_| Error::<T>::ConversionError)?,
-				)?;
+					asset_id,
+					amount,
+					currency,
+				)
+			};
+		
+			if total_available >= proposal_amount {
+				// Handle cases where reserves fully cover the proposal
+				match (
+					reserves.usdt >= proposal_amount,
+					reserves.usdc >= proposal_amount,
+				) {
+					(true, _) => transfer_reserve(proposal_amount, PaymentAssets::USDT)?,
+					(_, true) => transfer_reserve(proposal_amount, PaymentAssets::USDC)?,
+					_ => {
+						// Use both USDT and USDC
+						let usdt_part = reserves.usdt;
+						let usdc_part = proposal_amount.saturating_sub(usdt_part);
+						transfer_reserve(usdt_part, PaymentAssets::USDT)?;
+						transfer_reserve(usdc_part, PaymentAssets::USDC)?;
+					}
+				}
 			} else {
-				// Transfer only the available property reserves
-				<T as pallet::Config>::ForeignCurrency::transfer(
-					proposal.payment_asset.id(), 
-					&Self::account_id(), 
-					&letting_agent, 
-					property_reserves, 
-					Preservation::Expendable,
-				)
-				.map_err(|_| Error::<T>::NotEnoughFunds)?;
+				// Use up all available reserves, record remaining as debt
+				ensure!(total_available < proposal_amount, Error::<T>::NotEnoughFunds);
 		
-				// Calculate the remaining amount needed
-				let remaining_amount = proposal_amount.saturating_sub(property_reserves);
+				transfer_reserve(reserves.usdt, PaymentAssets::USDT)?;
+				transfer_reserve(reserves.usdc, PaymentAssets::USDC)?;
 		
-				// Increase the property debts by the remaining amount
-				pallet_property_management::Pallet::<T>::increase_debts(
-					proposal.asset_id,
-					TryInto::<u64>::try_into(remaining_amount)
-					.map_err(|_| Error::<T>::ConversionError)?
-					.try_into()
-					.map_err(|_| Error::<T>::ConversionError)?,
-				)?;
+				let remaining = proposal_amount
+					.saturating_sub(reserves.usdt)
+					.saturating_sub(reserves.usdc);
 		
-				// Set the reserves to zero
-				pallet_property_management::Pallet::<T>::decrease_reserves(
-					proposal.asset_id,
-					TryInto::<u64>::try_into(property_reserves)
-					.map_err(|_| Error::<T>::ConversionError)?
-					.try_into()
-					.map_err(|_| Error::<T>::ConversionError)?,
-				)?;
+				pallet_property_management::Pallet::<T>::increase_debts(asset_id, remaining)?;
 			}
 		
-			// Emit event for proposal execution
 			Self::deposit_event(Event::ProposalExecuted {
-				asset_id: proposal.asset_id,
-				amount: proposal.amount,
+				asset_id,
+				amount: proposal_amount,
 			});
 		
 			Ok(())

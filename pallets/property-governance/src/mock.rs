@@ -333,8 +333,18 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 			(1984, [1; 32].into(), 1_500_000),
 			(1984, [2; 32].into(), 1_150_000),
 			(1984, [3; 32].into(), 1_150_000),
-			(1984, [4; 32].into(), 50),
+			(1984, [4; 32].into(), 5_000),
 			(1984, [5; 32].into(), 500),
+		], // Genesis accounts: id, account_id, balance
+	}
+	.assimilate_storage(&mut test)
+	.unwrap(); 
+
+	pallet_assets::GenesisConfig::<Test, Instance2> {
+		assets: vec![(1337, /* account("buyer", SEED, SEED) */ [0; 32].into(), true, 1)], // Genesis assets: id, owner, is_sufficient, min_balance
+		metadata: vec![(1337, "USDC".into(), "USDC".into(), 0)], // Genesis metadata: id, name, symbol, decimals
+		accounts: vec![
+			(1337, [4; 32].into(), 5000),
 		], // Genesis accounts: id, account_id, balance
 	}
 	.assimilate_storage(&mut test)

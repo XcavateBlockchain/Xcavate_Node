@@ -8,7 +8,7 @@ use frame_support::{
 use crate::{Proposals, Challenges, ChallengeRoundsExpiring, OngoingChallengeVotes, OngoingVotes};
 
 use pallet_property_management::{
-	PropertyReserve, LettingStorage, PropertyDebts, StoredFunds, 
+	PropertyReserve, LettingStorage, PropertyDebts, InvestorFunds, 
 	LettingAgentLocations, LettingInfo
 };
 
@@ -67,7 +67,7 @@ fn propose_works() {
 			1000,
 			PaymentAssets::USDT,
 		));
-		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 1000);
 		assert_ok!(PropertyGovernance::propose(
 			RuntimeOrigin::signed([2; 32].into()),
 			0,
@@ -120,7 +120,8 @@ fn proposal_with_low_amount_works() {
 			500,
 			bvec![10, 10]
 		));
-		assert_eq!(Balances::free_balance(&([4; 32].into())), 4400);
+		assert_eq!(Balances::free_balance(&([4; 32].into())), 4900);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4500);
 		assert_eq!(OngoingVotes::<Test>::get(1).is_some(), false);
 	});
 }
@@ -400,10 +401,11 @@ fn proposal_pass() {
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::root(), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::root(), [10; 32].into()));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::root(), [11; 32].into()));
 		assert_ok!(NftMarketplace::list_object(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([2; 32].into()),
 			0,
 			bvec![10, 10],
 			10_000,
@@ -444,6 +446,7 @@ fn proposal_pass() {
 		)));
 		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0));
 		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+		assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 20_000_000);
 		assert_ok!(PropertyManagement::distribute_income(
 			RuntimeOrigin::signed([0; 32].into()),
 			0,
@@ -462,13 +465,14 @@ fn proposal_pass() {
 			crate::Vote::Yes
 		));
 		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
+		assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 19_999_000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 1_000);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 1000);
 		run_to_block(31);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 500_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 0);
+		assert_eq!(ForeignAssets::balance(1984, &[0; 32].into()), 20_000_000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 0);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 0);
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
 		assert_eq!(OngoingVotes::<Test>::get(1).is_none(), true);
 	});
@@ -482,6 +486,7 @@ fn proposal_pass_2() {
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::root(), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::root(), [10; 32].into()));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::root(), [11; 32].into()));
 		assert_ok!(NftMarketplace::list_object(
@@ -519,21 +524,21 @@ fn proposal_pass_2() {
 			RuntimeOrigin::root(),
 			0,
 			bvec![10, 10],
-			[0; 32].into(),
+			[4; 32].into(),
 		));
 		assert_ok!(PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed(
-			[0; 32].into()
+			[4; 32].into()
 		)));
-		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0));
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([4; 32].into()), 0));
+		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
 		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			1000,
 			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			10000,
 			bvec![10, 10]
@@ -549,28 +554,33 @@ fn proposal_pass_2() {
 			crate::Vote::Yes
 		));
 		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 1000);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 1000);
+		assert_eq!(PropertyReserve::<Test>::get(0).usdt, 1000);
+		assert_eq!(PropertyReserve::<Test>::get(0).usdc, 0);
 		run_to_block(31);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 500_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 0);
+		System::assert_last_event(Event::ProposalExecuted{ asset_id: 0, amount: 10000}.into());
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 5000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 0);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 0);
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
 		assert_eq!(PropertyDebts::<Test>::get(0), 9_000);
-		assert_eq!(StoredFunds::<Test>::get::<AccountId>([1; 32].into()), 0);
+		assert_eq!(InvestorFunds::<Test>::get::<AccountId, PaymentAssets>([1; 32].into(), PaymentAssets::USDT), 0);
 		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			3000,
 			PaymentAssets::USDT,
 		));
 		assert_eq!(PropertyDebts::<Test>::get(0), 6000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 0);
-		assert_eq!(StoredFunds::<Test>::get::<AccountId>([1; 32].into()), 0);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 0);
+		assert_eq!(InvestorFunds::<Test>::get::<AccountId, PaymentAssets>([1; 32].into(), PaymentAssets::USDT), 0);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 5000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 0);
 	});
 }
- 
+
 #[test]
 fn proposal_not_pass() {
 	new_test_ext().execute_with(|| {
@@ -579,6 +589,7 @@ fn proposal_not_pass() {
 		assert_ok!(NftMarketplace::create_new_location(RuntimeOrigin::root(), 0, bvec![10, 10]));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::root(), [10; 32].into()));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::root(), [11; 32].into()));
 		assert_ok!(NftMarketplace::list_object(
@@ -616,21 +627,21 @@ fn proposal_not_pass() {
 			RuntimeOrigin::root(),
 			0,
 			bvec![10, 10],
-			[0; 32].into(),
+			[4; 32].into(),
 		));
 		assert_ok!(PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed(
-			[0; 32].into()
+			[4; 32].into()
 		)));
-		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0));
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([4; 32].into()), 0));
+		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
 		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			1000,
 			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			1000,
 			bvec![10, 10]
@@ -641,13 +652,14 @@ fn proposal_not_pass() {
 			crate::Vote::No
 		));
 		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
+		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_900);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 1000);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 1000);
 		run_to_block(31);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 1000);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 1000);
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
 		System::assert_last_event(Event::ProposalRejected{ proposal_id: 1}.into());
 	});
@@ -662,6 +674,7 @@ fn proposal_not_pass_2() {
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::root(), [10; 32].into()));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::root(), [11; 32].into()));
 		assert_ok!(NftMarketplace::list_object(
@@ -700,21 +713,21 @@ fn proposal_not_pass_2() {
 			RuntimeOrigin::root(),
 			0,
 			bvec![10, 10],
-			[0; 32].into(),
+			[4; 32].into(),
 		));
 		assert_ok!(PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed(
-			[0; 32].into()
+			[4; 32].into()
 		)));
-		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0));
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([4; 32].into()), 0));
+		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
 		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			1000,
 			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			10000,
 			bvec![10, 10]
@@ -726,15 +739,15 @@ fn proposal_not_pass_2() {
 		));
 		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
 		assert_eq!(Proposals::<Test>::get(1).unwrap().amount, 10000);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 1000);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 1000);
 		run_to_block(31);
 		System::assert_last_event(Event::ProposalThresHoldNotReached{ proposal_id: 1, required_threshold: Percent::from_percent(67)}.into());
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_998_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 501_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 1000);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 1000);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 1000);
 	});
 }
 
@@ -1458,6 +1471,7 @@ fn different_proposals() {
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [1; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [2; 32].into()));
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [3; 32].into()));
+		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [4; 32].into()));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::root(), [10; 32].into()));
 		assert_ok!(NftMarketplace::register_lawyer(RuntimeOrigin::root(), [11; 32].into()));
 		assert_ok!(NftMarketplace::list_object(
@@ -1497,21 +1511,21 @@ fn different_proposals() {
 			RuntimeOrigin::root(),
 			0,
 			bvec![10, 10],
-			[0; 32].into(),
+			[4; 32].into(),
 		));
 		assert_ok!(PropertyManagement::letting_agent_deposit(RuntimeOrigin::signed(
-			[0; 32].into()
+			[4; 32].into()
 		)));
-		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([0; 32].into()), 0));
-		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [0; 32].into());
+		assert_ok!(PropertyManagement::set_letting_agent(RuntimeOrigin::signed([4; 32].into()), 0));
+		assert_eq!(LettingStorage::<Test>::get(0).unwrap(), [4; 32].into());
 		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			3000,
 			PaymentAssets::USDT,
 		));
 		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			1000,
 			bvec![10, 10]
@@ -1522,16 +1536,16 @@ fn different_proposals() {
 			crate::Vote::Yes
 		));
 		assert_eq!(Proposals::<Test>::get(1).is_some(), true);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_996_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 503_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 3000);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 3000);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 3000);
 		run_to_block(31);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_996_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 503_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 3000);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 3000);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 3000);
 		assert_eq!(Proposals::<Test>::get(1).is_none(), true);
 		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			3000,
 			bvec![10, 10]
@@ -1548,11 +1562,11 @@ fn different_proposals() {
 			crate::Vote::Yes
 		));
 		run_to_block(61);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_996_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 503_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 3000);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 2000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 3000);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 3000);
 		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			3000,
 			bvec![10, 10]
@@ -1574,17 +1588,23 @@ fn different_proposals() {
 			crate::Vote::Yes
 		));
 		run_to_block(91);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_800);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 500_000);
-		assert_eq!(PropertyReserve::<Test>::get(0), 0);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 5000);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 0);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 0);
 		assert_ok!(PropertyManagement::distribute_income(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
-			2000,
+			1700,
 			PaymentAssets::USDT,
 		));
+		assert_ok!(PropertyManagement::distribute_income(
+			RuntimeOrigin::signed([4; 32].into()),
+			0,
+			300,
+			PaymentAssets::USDC,
+		));
 		assert_ok!(PropertyGovernance::propose(
-			RuntimeOrigin::signed([0; 32].into()),
+			RuntimeOrigin::signed([4; 32].into()),
 			0,
 			1500,
 			bvec![10, 10]
@@ -1606,8 +1626,10 @@ fn different_proposals() {
 			crate::Vote::No
 		));
 		run_to_block(121);
-		assert_eq!(Balances::free_balance(&([0; 32].into())), 19_999_300);
-		assert_eq!(Balances::free_balance(&PropertyGovernance::account_id()), 500_500);
-		assert_eq!(PropertyReserve::<Test>::get(0), 500);
+		assert_eq!(ForeignAssets::balance(1984, &[4; 32].into()), 4800);
+		assert_eq!(ForeignAssets::balance(1984, &PropertyGovernance::account_id()), 200);
+		assert_eq!(ForeignAssets::balance(1337, &[4; 32].into()), 4700);
+		assert_eq!(ForeignAssets::balance(1337, &PropertyGovernance::account_id()), 300);
+		assert_eq!(PropertyReserve::<Test>::get(0).total, 500);
 	});
-}
+} 
