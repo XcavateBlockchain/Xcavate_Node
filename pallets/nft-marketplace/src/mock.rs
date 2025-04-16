@@ -41,7 +41,7 @@ frame_support::construct_runtime!(
 	pub enum Test
 	{
 		System: frame_system::{Pallet, Call, Config<T>, Storage, Event<T>},
-		Uniques: pallet_nfts::{Pallet, Call, Storage, Event<T>},
+		Nfts: pallet_nfts::{Pallet, Call, Storage, Event<T>},
 		NftFractionalization: pallet_nft_fractionalization,
 		NftMarketplace: pallet_nft_marketplace,
 		Balances: pallet_balances::{Pallet, Call, Storage, Config<T>, Event<T>},
@@ -211,7 +211,7 @@ impl pallet_nft_fractionalization::Config for Test {
 	type AssetBalance = <Self as pallet_balances::Config>::Balance;
 	type AssetId = <Self as pallet_assets::Config<Instance1>>::AssetId;
 	type Assets = LocalAssets;
-	type Nfts = Uniques;
+	type Nfts = Nfts;
 	type PalletId = NftFractionalizationPalletId;
 	type WeightInfo = ();
 	type StringLimit = ConstU32<50>;
@@ -235,13 +235,14 @@ impl pallet_nft_marketplace::Config for Test {
 	type NativeCurrency = Balances;
 	type LocalCurrency = LocalAssets;
 	type ForeignCurrency = ForeignAssets;
+	type Nfts = Nfts;
 	type PalletId = NftMarketplacePalletId;
 	type MaxNftToken = MaxNftTokens;
 	type LocationOrigin = EnsureRoot<Self::AccountId>;
+	type NftCollectionId = <Self as pallet_nfts::Config>::CollectionId;
+	type NftId = <Self as pallet_nfts::Config>::ItemId;
 	#[cfg(feature = "runtime-benchmarks")]
 	type Helper = NftHelper;
-	type CollectionId = u32;
-	type ItemId = u32;
 	type TreasuryId = TreasuryPalletId;
 	type CommunityProjectsId = CommunityProjectPalletId;
 	type FractionalizeCollectionId = <Self as pallet_nfts::Config>::CollectionId;

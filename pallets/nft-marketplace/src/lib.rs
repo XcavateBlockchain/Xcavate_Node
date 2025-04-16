@@ -21,9 +21,7 @@ use frame_support::{
 		fungibles::Mutate as FungiblesMutate,
 		fungibles::Inspect as FungiblesInspect,
 		nonfungibles_v2::Mutate as NonfungiblesMutate,
-		nonfungibles_v2::Inspect as NonfungiblesInspect,
 		nonfungibles_v2::{Create, Transfer},
-		Currency, Incrementable,
 		tokens::Preservation,
 	},
 	PalletId, DefaultNoBound,
@@ -32,14 +30,12 @@ use frame_support::{
 
 use frame_support::sp_runtime::{
 	traits::{
-		AccountIdConversion, CheckedAdd, CheckedSub, CheckedDiv, CheckedMul, StaticLookup, Zero,
+		AccountIdConversion, CheckedAdd, CheckedSub, CheckedDiv, CheckedMul, StaticLookup, Zero, One,
 	},
 };
 
-use enumflags2::BitFlags;
-
 use pallet_nfts::{
-	CollectionConfig, CollectionSetting, CollectionSettings, ItemConfig, ItemSettings, MintSettings,
+	CollectionConfig, CollectionSettings, ItemConfig, ItemSettings, MintSettings,
 };
 
 use frame_system::RawOrigin;
@@ -58,9 +54,7 @@ pub type ForeignAssetIdOf<T> =
 
 type FrationalizedNftBalanceOf<T> = <T as pallet_nft_fractionalization::Config>::AssetBalance;
 
-type CurrencyBalanceOf<T> = <<T as pallet_nfts::Config>::Currency as Currency<
-	<T as frame_system::Config>::AccountId,
->>::Balance;
+type NativeBalance<T> = <<T as Config>::NativeCurrency as fungible::Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -102,15 +96,15 @@ pub mod pallet {
 	/// Infos regarding the listing of a real estate object.
 	#[derive(Encode, Decode, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
-	pub struct NftListingDetails<ItemId, CollectionId, T: Config> {
+	pub struct NftListingDetails<NftId, NftCollectionId, T: Config> {
 		pub real_estate_developer: AccountIdOf<T>,
 		pub token_price: Balance,
 		pub collected_funds: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
 		pub collected_tax: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
 		pub collected_fees: BoundedBTreeMap<PaymentAssets, Balance, T::MaxNftToken>,
 		pub asset_id: u32,
-		pub item_id: ItemId,
-		pub collection_id: CollectionId,
+		pub item_id: NftId,
+		pub collection_id: NftCollectionId,
 		pub token_amount: u32,
 	}
 
@@ -118,12 +112,12 @@ pub mod pallet {
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
-	pub struct TokenListingDetails<ItemId, CollectionId, T: Config> {
+	pub struct TokenListingDetails<NftId, NftCollectionId, T: Config> {
 		pub seller: AccountIdOf<T>,
 		pub token_price: Balance,
 		pub asset_id: u32,
-		pub item_id: ItemId,
-		pub collection_id: CollectionId,
+		pub item_id: NftId,
+		pub collection_id: NftCollectionId,
 		pub amount: u32,
 	}
 
@@ -131,9 +125,9 @@ pub mod pallet {
 	#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 	#[derive(Encode, Decode, Clone, PartialEq, Eq, MaxEncodedLen, RuntimeDebug, TypeInfo)]
 	#[scale_info(skip_type_params(T))]
-	pub struct AssetDetails<ItemId, CollectionId, T: Config> {
-		pub collection_id: CollectionId,
-		pub item_id: ItemId,
+	pub struct AssetDetails<NftId, NftCollectionId, T: Config> {
+		pub collection_id: NftCollectionId,
+		pub item_id: NftId,
 		pub region: u32,
 		pub location: LocationId<T>,
 		pub price: Balance,
@@ -269,7 +263,7 @@ pub mod pallet {
 			CollectionId = <Self as pallet::Config>::NftCollectionId>	
 			+ Transfer<Self::AccountId>
 			+ nonfungibles_v2::Mutate<AccountIdOf<Self>, ItemConfig>
-			+ nonfungibles_v2::Create<AccountIdOf<Self>, CollectionConfig<CurrencyBalanceOf<Self>, 
+			+ nonfungibles_v2::Create<AccountIdOf<Self>, CollectionConfig<NativeBalance<Self>, 
 			BlockNumberFor<Self>, <Self as pallet_nfts::Config>::CollectionId>>;
 
 		/// The marketplace's pallet id, used for deriving its sovereign account ID.
@@ -293,31 +287,12 @@ pub mod pallet {
 		type NftCollectionId: Member + Parameter + MaxEncodedLen + Copy;
 
 		/// The type used to identify an NFT within a collection.
-		type NftId: Member + Parameter + MaxEncodedLen + Copy;
-
-		/// Collection id type from pallet nfts.
-		type CollectionId: IsType<<Self as pallet_nfts::Config>::CollectionId>
-			+ Parameter
-			+ From<u32>
-			+ Default
-			+ Ord
-			+ Copy
-			+ MaxEncodedLen
-			+ Encode;
-
-		/// Item id type from pallet nfts.
-		type ItemId: IsType<<Self as pallet_nfts::Config>::ItemId>
-			+ Parameter
-			+ From<u32>
-			+ Ord
-			+ Copy
-			+ MaxEncodedLen
-			+ Encode;
+		type NftId: Member + Parameter + MaxEncodedLen + Copy + Default + CheckedAdd + One;
 
 		/// Collection id type from pallet nft fractionalization.
 		type FractionalizeCollectionId: IsType<<Self as pallet_nft_fractionalization::Config>::NftCollectionId>
 			+ Parameter
-			+ From<CollectionId<Self>>
+			+ From<<Self as pallet::Config>::NftCollectionId>
 			+ Ord
 			+ Copy
 			+ MaxEncodedLen
@@ -326,7 +301,7 @@ pub mod pallet {
 		/// Item id type from pallet nft fractionalization.
 		type FractionalizeItemId: IsType<<Self as pallet_nft_fractionalization::Config>::NftId>
 			+ Parameter
-			+ From<ItemId<Self>>
+			+ From<<Self as pallet::Config>::NftId>
 			+ Ord
 			+ Copy
 			+ MaxEncodedLen
@@ -360,8 +335,6 @@ pub mod pallet {
 	}
 
 	pub type FractionalizedAssetId<T> = <T as Config>::AssetId;
-	pub type CollectionId<T> = <T as Config>::CollectionId;
-	pub type ItemId<T> = <T as Config>::ItemId;
 	pub type FractionalizeCollectionId<T> = <T as Config>::FractionalizeCollectionId;
 	pub type FractionalizeItemId<T> = <T as Config>::FractionalizeItemId;
 	pub type RegionId = u32;
@@ -369,21 +342,21 @@ pub mod pallet {
 	pub type LocationId<T> = BoundedVec<u8, <T as Config>::PostcodeLimit>;
 
 	pub(super) type NftListingDetailsType<T> = NftListingDetails<
-		<T as pallet::Config>::ItemId,
-		<T as pallet::Config>::CollectionId,
+		<T as pallet::Config>::NftId,
+		<T as pallet::Config>::NftCollectionId,
 		T,
 	>;
 
 	pub(super) type ListingDetailsType<T> = TokenListingDetails<
-		<T as pallet::Config>::ItemId,
-		<T as pallet::Config>::CollectionId,
+		<T as pallet::Config>::NftId,
+		<T as pallet::Config>::NftCollectionId,
 		T,
 	>;
 
 	/// Id for the next nft in a collection.
 	#[pallet::storage]
 	pub(super) type NextNftId<T: Config> =
-		StorageMap<_, Blake2_128Concat, <T as pallet::Config>::CollectionId, u32, ValueQuery>;
+		StorageMap<_, Blake2_128Concat, <T as pallet::Config>::NftCollectionId, <T as pallet::Config>::NftId, ValueQuery>;
 
 	/// Id of the possible next asset that would be used for
 	/// Nft fractionalization.
@@ -420,9 +393,9 @@ pub mod pallet {
 	pub(super) type RegisteredNftDetails<T: Config> = StorageDoubleMap<
 		_,
 		Blake2_128Concat,
-		<T as pallet::Config>::CollectionId,
+		<T as pallet::Config>::NftCollectionId,
 		Blake2_128Concat,
-		<T as pallet::Config>::ItemId,
+		<T as pallet::Config>::NftId,
 		NftDetails<T>,
 		OptionQuery,
 	>;
@@ -492,7 +465,7 @@ pub mod pallet {
 		_,
 		Blake2_128Concat,
 		u32,
-		AssetDetails<<T as pallet::Config>::ItemId, <T as pallet::Config>::CollectionId, T>,
+		AssetDetails<<T as pallet::Config>::NftId, <T as pallet::Config>::NftCollectionId, T>,
 		OptionQuery,
 	>;
 
@@ -532,8 +505,8 @@ pub mod pallet {
 	pub enum Event<T: Config> {
 		/// A new object has been listed on the marketplace.
 		ObjectListed {
-			collection_index: <T as pallet::Config>::CollectionId,
-			item_index: <T as pallet::Config>::ItemId,
+			collection_index: <T as pallet::Config>::NftCollectionId,
+			item_index: <T as pallet::Config>::NftId,
 			price: Balance,
 			seller: AccountIdOf<T>,
 		},
@@ -566,7 +539,7 @@ pub mod pallet {
 		/// Documents have been approved or rejected.
 		DocumentsConfirmed { signer: AccountIdOf<T>, listing_id: ListingId, approve: bool },
 		/// The property nft got burned.
-		PropertyNftBurned { collection_id: CollectionId<T>, item_id: ItemId<T>, asset_id: u32 },
+		PropertyNftBurned { collection_id: <T as pallet::Config>::NftCollectionId, item_id: <T as pallet::Config>::NftId, asset_id: u32 },
 	}
 
 	// Errors inform users that something went wrong.
@@ -714,13 +687,12 @@ pub mod pallet {
 				Error::<T>::UserNotWhitelisted
 			);
 			ensure!(token_amount <= T::MaxNftToken::get(), Error::<T>::TooManyToken);
-			let collection_id: CollectionId<T> =
-				RegionCollections::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let collection_id = RegionCollections::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 			ensure!(
 				LocationRegistration::<T>::get(region, location.clone()),
 				Error::<T>::LocationUnknown
 			);
-			let mut next_item_id = NextNftId::<T>::get(collection_id);
+			let item_id = NextNftId::<T>::get(collection_id);
 			let mut asset_number: u32 = NextAssetId::<T>::get();
 			let mut asset_id: LocalAssetIdOf<T> = asset_number.into();
 			while !T::LocalCurrency::total_issuance(asset_id)
@@ -730,7 +702,6 @@ pub mod pallet {
 				asset_id = asset_number.into();
 			}
 			let asset_id: FractionalizedAssetId<T> = asset_number.into();
-			let item_id: ItemId<T> = next_item_id.into();
 			let mut listing_id = NextListingId::<T>::get();
 			let mut initial_funds = BoundedBTreeMap::default();
 			initial_funds.try_insert(PaymentAssets::USDC, Default::default()).map_err(|_| Error::<T>::ExceedsMaxEntries)?;
@@ -755,20 +726,18 @@ pub mod pallet {
 			)
 			.map_err(|_| Error::<T>::NotEnoughFunds)?;
 			let pallet_account = Self::account_id();
-			pallet_nfts::Pallet::<T>::do_mint(
-				collection_id.into(),
-				item_id.into(),
-				Some(pallet_account.clone()),
-				property_account.clone(),
-				Self::default_item_config(),
-				|_, _| Ok(()),
+			<T as pallet::Config>::Nfts::mint_into(
+				&collection_id,
+				&item_id,
+				&property_account.clone(),
+				&Self::default_item_config(),
+				true
 			)?;
-			let pallet_origin: OriginFor<T> = RawOrigin::Signed(pallet_account.clone()).into();
-			pallet_nfts::Pallet::<T>::set_metadata(
-				pallet_origin.clone(),
-				collection_id.into(),
-				item_id.into(),
-				data.clone(),
+			<T as pallet::Config>::Nfts::set_item_metadata(
+				Some(&pallet_account),
+				&collection_id,
+				&item_id,
+				&data,
 			)?;
 			let registered_nft_details = NftDetails {
 				spv_created: false,
@@ -799,7 +768,7 @@ pub mod pallet {
 			let asset_details =
 				AssetDetails { collection_id, item_id, region, location, price: property_price, token_amount };
 			AssetIdDetails::<T>::insert(asset_number, asset_details);
-			next_item_id = next_item_id.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
+			let next_item_id = item_id.checked_add(&One::one()).ok_or(Error::<T>::ArithmeticOverflow)?;
 			asset_number = asset_number.checked_add(1).ok_or(Error::<T>::ArithmeticOverflow)?;
 			NextNftId::<T>::insert(collection_id, next_item_id);
 			NextAssetId::<T>::put(asset_number);
@@ -977,7 +946,7 @@ pub mod pallet {
 		pub fn relist_token(
 			origin: OriginFor<T>,
 			region: RegionId,
-			item_id: <T as pallet::Config>::ItemId,
+			item_id: <T as pallet::Config>::NftId,
 			token_price: Balance,
 			amount: u32,
 		) -> DispatchResult {
@@ -987,8 +956,7 @@ pub mod pallet {
 				pallet_xcavate_whitelist::Pallet::<T>::whitelisted_accounts(signer.clone()),
 				Error::<T>::UserNotWhitelisted
 			);
-			let collection_id: CollectionId<T> =
-				RegionCollections::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
+			let collection_id = RegionCollections::<T>::get(region).ok_or(Error::<T>::RegionUnknown)?;
 
 			let nft_details = RegisteredNftDetails::<T>::get(collection_id, item_id)
 				.ok_or(Error::<T>::NftNotFound)?;
@@ -1656,10 +1624,10 @@ pub mod pallet {
 				fractionalize_asset_id.into(),
 				user_lookup,
 			)?;
-			pallet_nfts::Pallet::<T>::burn(
-				pallet_origin,
-				nft_details.collection_id.into(),
-				nft_details.item_id.into(),
+			<T as pallet::Config>::Nfts::burn(
+				&nft_details.collection_id,
+				&nft_details.item_id,
+				None,
 			)?;
 			Self::deposit_event(Event::<T>::PropertyNftBurned { 
 				collection_id: nft_details.collection_id, 
@@ -1832,24 +1800,20 @@ pub mod pallet {
 
 		/// Set the default collection configuration for creating a collection.
 		fn default_collection_config() -> CollectionConfig<
-			CurrencyBalanceOf<T>,
+			NativeBalance<T>,
 			BlockNumberFor<T>,
 			<T as pallet_nfts::Config>::CollectionId,
 		> {
-			Self::collection_config_from_disabled_settings(
-				CollectionSetting::DepositRequired.into(),
-			)
+			Self::collection_config_with_all_settings_enabled()
 		}
 
-		fn collection_config_from_disabled_settings(
-			settings: BitFlags<CollectionSetting>,
-		) -> CollectionConfig<
-			CurrencyBalanceOf<T>,
+		fn collection_config_with_all_settings_enabled() -> CollectionConfig<
+			NativeBalance<T>,
 			BlockNumberFor<T>,
 			<T as pallet_nfts::Config>::CollectionId,
 		> {
 			CollectionConfig {
-				settings: CollectionSettings::from_disabled(settings),
+				settings: CollectionSettings::all_enabled(),
 				max_supply: None,
 				mint_settings: MintSettings::default(),
 			}

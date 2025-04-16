@@ -1,4 +1,3 @@
-use crate::ItemId;
 use crate::{mock::*, Error};
 use frame_support::BoundedVec;
 use frame_support::{assert_noop, assert_ok};
@@ -117,7 +116,7 @@ fn list_object_works() {
 		assert_eq!(NextAssetId::<Test>::get(), 1);
 		assert_eq!(OngoingObjectListing::<Test>::get(0).is_some(), true);
 		assert_eq!(RegisteredNftDetails::<Test>::get(0, 0).is_some(), true);
-		assert_eq!(Uniques::owner(0, 0).unwrap(), NftMarketplace::property_account_id(0));
+		assert_eq!(Nfts::owner(0, 0).unwrap(), NftMarketplace::property_account_id(0));
 	})
 }
 
@@ -183,7 +182,7 @@ fn buy_token_works() {
 		));
 		assert_ok!(NftMarketplace::buy_token(RuntimeOrigin::signed([6; 32].into()), 0, 30, crate::PaymentAssets::USDT));
 		assert_eq!(ListedToken::<Test>::get(0).unwrap(), 70);
-		assert_eq!(TokenOwner::<Test>::get::<AccountId, ItemId<Test>>([6; 32].into(), 0).token_amount, 30);
+		assert_eq!(TokenOwner::<Test>::get::<AccountId, u32>([6; 32].into(), 0).token_amount, 30);
 		assert_eq!(TokenBuyer::<Test>::get(0).len(), 1);
 		assert_eq!(Balances::free_balance(&([6; 32].into())), 5_000);
 		assert_eq!(ForeignAssets::balance(1984, &[6; 32].into()), 1_188_000_000_000_000_000);
@@ -301,9 +300,9 @@ fn listing_and_selling_multiple_objects() {
 		assert_eq!(ListedToken::<Test>::get(0).unwrap(), 67);
 		assert_eq!(ListedToken::<Test>::get(2).unwrap(), 50);
 		assert_eq!(ListedToken::<Test>::get(3).unwrap(), 100);
-		assert_eq!(TokenOwner::<Test>::get::<AccountId, ItemId<Test>>([2; 32].into(), 2).token_amount, 30);
+		assert_eq!(TokenOwner::<Test>::get::<AccountId, u32>([2; 32].into(), 2).token_amount, 30);
 		assert_eq!(TokenBuyer::<Test>::get(2).len(), 2);
-		assert_eq!(TokenOwner::<Test>::get::<AccountId, ItemId<Test>>([1; 32].into(), 1).token_amount, 0);
+		assert_eq!(TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 1).token_amount, 0);
 		assert_eq!(TokenBuyer::<Test>::get(1).len(), 0);
 		assert_eq!(PropertyOwnerToken::<Test>::get::<u32, AccountId>(1, [1; 32].into()), 100);
 	});
@@ -555,7 +554,7 @@ fn distributes_nfts_and_funds() {
 		assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 0);
 		assert_eq!(RegisteredNftDetails::<Test>::get(0, 0).unwrap().spv_created, true);
 		assert_eq!(ListedToken::<Test>::get(0), None);
-		assert_eq!(TokenOwner::<Test>::get::<AccountId, ItemId<Test>>([1; 32].into(), 0).token_amount, 0);
+		assert_eq!(TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount, 0);
 		assert_eq!(TokenBuyer::<Test>::get(0).len(), 0);
 		assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 100);
 	})
@@ -619,7 +618,7 @@ fn distributes_nfts_and_funds_2() {
 		assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 4_000);
 		assert_eq!(RegisteredNftDetails::<Test>::get(0, 0).unwrap().spv_created, true);
 		assert_eq!(ListedToken::<Test>::get(0), None);
-		assert_eq!(TokenOwner::<Test>::get::<AccountId, ItemId<Test>>([1; 32].into(), 0).token_amount, 0);
+		assert_eq!(TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount, 0);
 		assert_eq!(TokenBuyer::<Test>::get(0).len(), 0);
 		assert_eq!(LocalAssets::balance(0, &[1; 32].into()), 100);
 	})
@@ -670,14 +669,14 @@ fn reject_contract_and_refund() {
 
 		assert_eq!(ForeignAssets::balance(1984, &NftMarketplace::property_account_id(0)), 624000);
 		assert_eq!(
-			TokenOwner::<Test>::get::<AccountId, ItemId<Test>>([1; 32].into(), 0)
+			TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0)
 				.paid_funds
 				.get(&crate::PaymentAssets::USDT)
 				.unwrap(),
 			&600000_u128
 		);
 		assert_eq!(
-			TokenOwner::<Test>::get::<AccountId, ItemId<Test>>([1; 32].into(), 0)
+			TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0)
 				.paid_tax
 				.get(&crate::PaymentAssets::USDT)
 				.unwrap(),
@@ -699,7 +698,7 @@ fn reject_contract_and_refund() {
 		assert_eq!(ForeignAssets::balance(1337, &[11; 32].into()), 0);
 		assert_eq!(RegisteredNftDetails::<Test>::get(0, 0).is_none(), true);
 		assert_eq!(ListedToken::<Test>::get(0), None);
-		assert_eq!(TokenOwner::<Test>::get::<AccountId, ItemId<Test>>([1; 32].into(), 0).token_amount, 0);
+		assert_eq!(TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount, 0);
 		assert_eq!(TokenBuyer::<Test>::get(0).len(), 0);
 		assert_eq!(pallet_nfts::Item::<Test>::get(0, 0).is_none(), true);
 	})
@@ -769,7 +768,7 @@ fn second_attempt_works() {
 		assert_eq!(ForeignAssets::balance(1984, &[11; 32].into()), 4_000);
 		assert_eq!(RegisteredNftDetails::<Test>::get(0, 0).is_none(), true);
 		assert_eq!(ListedToken::<Test>::get(0), None);
-		assert_eq!(TokenOwner::<Test>::get::<AccountId, ItemId<Test>>([1; 32].into(), 0).token_amount, 0);
+		assert_eq!(TokenOwner::<Test>::get::<AccountId, u32>([1; 32].into(), 0).token_amount, 0);
 		assert_eq!(TokenBuyer::<Test>::get(0).len(), 0);
 		assert_eq!(pallet_nfts::Item::<Test>::get(0, 0).is_none(), true);
 	})
@@ -894,12 +893,12 @@ fn relist_nfts_not_created_with_marketplace_fails() {
 	new_test_ext().execute_with(|| {
 		System::set_block_number(1);
 		assert_ok!(XcavateWhitelist::add_to_whitelist(RuntimeOrigin::root(), [0; 32].into()));
-		assert_ok!(Uniques::create(
+		assert_ok!(Nfts::create(
 			RuntimeOrigin::signed([0; 32].into()),
 			sp_runtime::MultiAddress::Id([0; 32].into()),
 			Default::default()
 		));
-		assert_ok!(Uniques::mint(
+		assert_ok!(Nfts::mint(
 			RuntimeOrigin::signed([0; 32].into()),
 			0,
 			0,
